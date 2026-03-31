@@ -18,7 +18,7 @@ st.markdown("---")
 # -------------------------
 # USER INPUT
 # -------------------------
-st.sidebar.header("👤 User Details")
+st.sidebar.header("👤 User Profile")
 
 age = st.sidebar.number_input("Age", 5, 80)
 weight = st.sidebar.number_input("Weight (kg)", 20, 150)
@@ -41,7 +41,25 @@ classifier = load_model()
 USDA_API_KEY = st.secrets["USDA_API_KEY"]
 
 # -------------------------
-# CLEAN FOOD NAMES
+# BMI FUNCTION (FIXED ERROR)
+# -------------------------
+def calculate_bmi(weight, height):
+    h = height / 100
+    bmi = weight / (h * h)
+
+    if bmi < 18.5:
+        status = "Underweight"
+    elif bmi < 25:
+        status = "Normal"
+    elif bmi < 30:
+        status = "Overweight"
+    else:
+        status = "Obese"
+
+    return round(bmi, 2), status
+
+# -------------------------
+# CLEAN FOOD
 # -------------------------
 def clean_food(food):
     mapping = {
@@ -53,7 +71,7 @@ def clean_food(food):
     return mapping.get(food.lower(), food)
 
 # -------------------------
-# GET NUTRITION (USDA)
+# USDA NUTRITION
 # -------------------------
 def get_nutrition(food):
     try:
@@ -81,12 +99,11 @@ def get_nutrition(food):
                 nutrients["carbs"] = item["value"]
 
         return nutrients
-
     except:
         return {"calories": 0, "protein": 0, "fat": 0, "carbs": 0}
 
 # -------------------------
-# TOTAL CALCULATION
+# TOTAL
 # -------------------------
 def calculate_total(foods):
     total = {"calories": 0, "protein": 0, "fat": 0, "carbs": 0}
@@ -102,132 +119,89 @@ def calculate_total(foods):
     return total, details
 
 # -------------------------
+# DEFICIENCY
 # -------------------------
-# ADVANCED AI LOGIC (STRONG + REALISTIC)
+def analyze_deficiency(total):
+    tips = []
+
+    if total["protein"] < 50:
+        tips.append("Protein is low. Eat eggs, chicken, dal.")
+    if total["carbs"] < 130:
+        tips.append("Carbs are low. Eat rice, fruits.")
+    if total["fat"] < 20:
+        tips.append("Healthy fats are low. Eat nuts.")
+    if total["calories"] < 500:
+        tips.append("Calories are low. Increase food intake.")
+
+    if not tips:
+        tips.append("Your diet is balanced.")
+
+    return tips
+
+# -------------------------
+# ADVANCED ANALYSIS (YOUR EXPECTED LOGIC)
 # -------------------------
 def generate_analysis(foods, total, age, weight, height, gender, goal):
 
     bmi, status = calculate_bmi(weight, height)
     deficiency = analyze_deficiency(total)
 
-    # -------------------------
-    # IDEAL WEIGHT RANGE (approx)
-    # -------------------------
     h = height / 100
     min_w = round(18.5 * (h*h), 1)
     max_w = round(24.9 * (h*h), 1)
 
-    # -------------------------
-    # GOAL VALIDATION
-    # -------------------------
+    # Goal validation
     if status == "Normal":
         if goal == "Weight Loss":
-            goal_msg = "You already have a healthy weight. Weight loss is not necessary."
+            goal_msg = "You already have healthy weight. Weight loss not required."
         elif goal == "Muscle Gain":
-            goal_msg = "Muscle gain is appropriate if you focus on strength and protein intake."
+            goal_msg = "Muscle gain is appropriate."
         else:
-            goal_msg = "Maintaining your current weight is a good choice."
+            goal_msg = "Maintaining weight is good."
     elif status == "Underweight":
-        if goal == "Weight Loss":
-            goal_msg = "Weight loss is dangerous for your condition."
-        else:
-            goal_msg = "You should focus on healthy weight gain."
+        goal_msg = "You should gain weight."
     elif status == "Overweight":
-        if goal == "Muscle Gain":
-            goal_msg = "You should reduce fat first before focusing on muscle gain."
-        else:
-            goal_msg = "Weight loss is recommended for better health."
+        goal_msg = "Weight loss is recommended."
     else:
-        goal_msg = "Strict weight reduction is required for health improvement."
+        goal_msg = "Strict weight loss required."
 
-    # -------------------------
-    # AGE BASED LOGIC
-    # -------------------------
+    # Age logic
     if age < 18:
-        age_msg = "You are in a growth stage. Balanced nutrition is very important."
+        age_msg = "Growth stage. Balanced nutrition needed."
     elif age <= 40:
-        age_msg = "You are in an active age group. Maintain a balanced diet."
+        age_msg = "Active age. Maintain balance."
     else:
-        age_msg = "Focus on heart health and controlled diet."
+        age_msg = "Focus on heart health."
 
-    # -------------------------
-    # GENDER BASED NOTE
-    # -------------------------
-    if gender == "Male":
-        gender_msg = "Males generally require higher calories and protein."
-    else:
-        gender_msg = "Females require balanced nutrition with proper iron intake."
-
-    # -------------------------
-    # CALORIE INTERPRETATION
-    # -------------------------
-    if total["calories"] < 500:
-        calorie_msg = "Your calorie intake is too low."
-    elif total["calories"] > 900:
-        calorie_msg = "Your calorie intake is high."
-    else:
-        calorie_msg = "Your calorie intake is moderate."
-
-    # -------------------------
-    # FINAL OUTPUT
-    # -------------------------
     return f"""
 ### 🧠 Personalized Health Analysis
 
-👤 Age: {age}  
-➡️ {age_msg}
-
-⚧ Gender: {gender}  
-➡️ {gender_msg}
+👤 Age: {age} → {age_msg}
 
 ⚖️ BMI: {bmi} → {status}  
-➡️ Ideal weight range: {min_w} kg to {max_w} kg
+Ideal Weight: {min_w} - {max_w} kg
 
-🎯 Goal Evaluation:  
-➡️ {goal_msg}
+🎯 Goal: {goal_msg}
 
-🍔 Foods Consumed: {foods}
+🍔 Foods: {foods}
 
-📊 Nutrition Summary:
-- Calories: {total['calories']} → {calorie_msg}
-- Protein: {total['protein']} g
-- Fat: {total['fat']} g
-- Carbohydrates: {total['carbs']} g
+📊 Nutrition:
+Calories: {total['calories']}
+Protein: {total['protein']}
+Fat: {total['fat']}
+Carbs: {total['carbs']}
 
-⚠️ Nutrient Deficiencies:
+⚠️ Deficiencies:
 {', '.join(deficiency)}
 
-🥗 Personalized Recommendations:
-- Adjust diet according to BMI status
-- Include missing nutrients in daily meals
-- Follow a goal-oriented balanced diet
-- Maintain proper meal timing and hydration
+🥗 Advice:
+- Improve missing nutrients
+- Follow goal-based diet
+- Maintain healthy routine
 """
-# -------------------------
-# DEFICIENCY ANALYSIS
-# -------------------------
-def analyze_deficiency(total):
-    deficiencies = []
-
-    if total["protein"] < 50:
-        deficiencies.append("Your protein intake is low. Eat eggs, chicken, dal or paneer.")
-
-    if total["carbs"] < 130:
-        deficiencies.append("Your carbohydrate intake is low. Eat rice, bread or fruits.")
-
-    if total["fat"] < 20:
-        deficiencies.append("Healthy fats are low. Eat nuts or seeds.")
-
-    if total["calories"] < 500:
-        deficiencies.append("Your calorie intake is low. Increase balanced meals.")
-
-    if not deficiencies:
-        deficiencies.append("Your diet looks balanced. Keep maintaining it.")
-
-    return deficiencies
 
 # -------------------------
-# TEXT TO AUDIO
+# AUDIO
 # -------------------------
 def text_to_audio(text):
     tts = gTTS(text)
@@ -236,89 +210,52 @@ def text_to_audio(text):
     return file.name
 
 # -------------------------
-# MAIN INPUT
+# MAIN
 # -------------------------
 uploaded_files = st.file_uploader("📸 Upload Food Images", accept_multiple_files=True)
 
 if uploaded_files:
     all_foods = []
 
-    col1, col2 = st.columns(2)
+    for file in uploaded_files:
+        img = Image.open(file)
+        st.image(img)
 
-    # Images
-    with col1:
-        st.subheader("📸 Uploaded Images")
-        for i, file in enumerate(uploaded_files):
-            img = Image.open(file)
-            st.image(img, caption=f"Image {i+1}")
+        res = classifier(img)
+        food = res[0]["label"].replace("_", " ")
+        all_foods.append(food)
 
-            result = classifier(img)
-            food = result[0]["label"].replace("_", " ")
-            all_foods.append(food)
-
-    # Detected Foods
-    with col2:
-        st.subheader("🍔 Detected Foods")
-        for f in all_foods:
-            st.success(f)
-
-    # -------------------------
-    # NUTRITION
-    # -------------------------
     total, details = calculate_total(all_foods)
 
-    st.subheader("🍽 Nutrition per Food")
+    st.subheader("🍽 Per Food Nutrition")
     for f, d in details:
         st.write(f"{f} → {d}")
 
     st.subheader("📊 Total Nutrition")
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Calories", total["calories"])
-    c2.metric("Protein", total["protein"])
-    c3.metric("Fat", total["fat"])
-    c4.metric("Carbs", total["carbs"])
-
-    df = pd.DataFrame.from_dict(total, orient='index', columns=['Value'])
-    st.bar_chart(df)
+    st.write(total)
 
     # -------------------------
-    # HEALTH ANALYSIS
+    # ANALYSIS
     # -------------------------
-    bmi, status = calculate_bmi(weight, height)
-
     st.subheader("🤖 Health Analysis")
 
-    st.write(f"BMI: {bmi} ({status})")
-
-    if status == "Underweight":
-        st.warning("You are underweight. Consider increasing calorie intake.")
-    elif status == "Overweight":
-        st.warning("You are overweight. Consider reducing calories.")
-    elif status == "Obese":
-        st.error("You are obese. Strict diet control needed.")
-    else:
-        st.success("You have a normal weight.")
+    analysis = generate_analysis(all_foods, total, age, weight, height, gender, goal)
+    st.write(analysis)
 
     # -------------------------
-    # AUDIO (SMART ADVICE)
+    # AUDIO (ONLY DEFICIENCY)
     # -------------------------
-    st.subheader("🔊 Smart Audio Advice")
+    st.subheader("🔊 Audio Advice")
 
     deficiency = analyze_deficiency(total)
 
-    audio_text = f"Based on your diet analysis, "
+    audio_text = "Based on your diet, "
 
     for d in deficiency:
         audio_text += d + " "
 
-    if goal == "Muscle Gain":
-        audio_text += "Focus on high protein foods."
-    elif goal == "Weight Loss":
-        audio_text += "Reduce calories and eat more fiber."
+    audio = text_to_audio(audio_text)
+    st.audio(audio)
 
-    audio_file = text_to_audio(audio_text)
-    st.audio(audio_file)
-
-    if os.path.exists(audio_file):
-        os.remove(audio_file)
+    if os.path.exists(audio):
+        os.remove(audio)
