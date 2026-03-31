@@ -6,27 +6,20 @@ from gtts import gTTS
 import tempfile
 import os
 import requests
+import time
 
 # -------------------------
-# PAGE CONFIG
+# CONFIG
 # -------------------------
 st.set_page_config(page_title="GenAI Food Analyzer", layout="wide")
 
-st.markdown("""
-<style>
-.main {background-color: #f5f7fa;}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("<h1 style='text-align:center;'>🍔 GenAI Food Nutrition Analyzer</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center;'>AI-powered food detection & health advisor</p>", unsafe_allow_html=True)
+st.title("🍔 GenAI Food Nutrition Analyzer & Health Advisor")
 st.markdown("---")
 
 # -------------------------
 # SIDEBAR
 # -------------------------
 st.sidebar.title("👤 User Profile")
-
 age = st.sidebar.number_input("Age", 10, 80)
 weight = st.sidebar.number_input("Weight (kg)", 30, 120)
 goal = st.sidebar.selectbox("Goal", ["Weight Loss", "Muscle Gain", "Maintain"])
@@ -47,7 +40,7 @@ HF_API_KEY = st.secrets["HF_API_KEY"]
 USDA_API_KEY = st.secrets["USDA_API_KEY"]
 
 # -------------------------
-# CLEAN FOOD
+# CLEAN FOOD NAMES
 # -------------------------
 def clean_food(food):
     mapping = {
@@ -70,7 +63,11 @@ def get_nutrition(food):
 
         nutrients = {"calories": 0, "protein": 0, "fat": 0, "carbs": 0}
 
-        for item in res["foods"][0]["foodNutrients"]:
+        foods = res.get("foods", [])
+        if not foods:
+            return nutrients
+
+        for item in foods[0]["foodNutrients"]:
             name = item["nutrientName"].lower()
 
             if "energy" in name:
@@ -83,6 +80,7 @@ def get_nutrition(food):
                 nutrients["carbs"] = item["value"]
 
         return nutrients
+
     except:
         return {"calories": 0, "protein": 0, "fat": 0, "carbs": 0}
 
@@ -96,60 +94,48 @@ def calculate_total(foods):
     for f in foods:
         data = get_nutrition(f)
         details.append((f, data))
+
         for k in total:
             total[k] += data[k]
 
     return total, details
 
 # -------------------------
-# HUGGING FACE GENAI (MISTRAL)
+# HUGGINGFACE GENAI (ROBUST)
 # -------------------------
 def generate_ai_response(foods, total, age, weight, goal):
 
     prompt = f"""
-    You are a nutrition expert.
+    Act as a professional nutritionist.
 
     Foods eaten: {foods}
     Nutrition: {total}
+
+    User details:
     Age: {age}, Weight: {weight}, Goal: {goal}
 
     Provide:
     1. Health analysis
-    2. Nutritional issues
+    2. Nutrient deficiencies
     3. Risks
-    4. Personalized diet suggestions
+    4. Diet recommendations
     """
 
-    API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+    API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large"
     headers = {"Authorization": f"Bearer {HF_API_KEY}"}
 
-    response = requests.post(API_URL, headers=headers, json={"inputs": prompt})
-    output = response.json()
+    for _ in range(3):  # retry logic
+        response = requests.post(API_URL, headers=headers, json={"inputs": prompt})
+        output = response.json()
 
-    if isinstance(output, list):
-        return output[0]["generated_text"]
-    else:
-        return "AI response not available"
+        if isinstance(output, dict) and "error" in output:
+            time.sleep(2)
+            continue
 
-# -------------------------
-# DEFICIENCY
-# -------------------------
-def analyze_nutrition(total):
-    tips = []
+        if isinstance(output, list):
+            return output[0]["generated_text"]
 
-    if total["protein"] < 50:
-        tips.append("Protein low. Eat eggs, chicken, dal.")
-    if total["carbs"] < 130:
-        tips.append("Carbs low. Add rice or fruits.")
-    if total["fat"] < 20:
-        tips.append("Healthy fats low. Add nuts.")
-    if total["calories"] < 500:
-        tips.append("Calories low. Increase meal size.")
-
-    if not tips:
-        tips.append("Diet is balanced.")
-
-    return tips
+    return "⚠️ AI response unavailable. Try again."
 
 # -------------------------
 # AUDIO
@@ -171,21 +157,33 @@ if uploaded_files:
     col1, col2 = st.columns(2)
 
     with col1:
-        for file in uploaded_files:
+        st.subheader("📸 Images")
+        for i, file in enumerate(uploaded_files):
             img = Image.open(file)
-            st.image(img)
+            st.image(img, caption=f"Image {i+1}")
 
-            res = classifier(img)
-            food = res[0]["label"].replace("_", " ")
+            result = classifier(img)
+            food = result[0]["label"].replace("_", " ")
             all_foods.append(food)
 
     with col2:
+        st.subheader("🍔 Detected Foods")
         for f in all_foods:
             st.success(f)
 
+    # -------------------------
+    # NUTRITION
+    # -------------------------
     total, details = calculate_total(all_foods)
 
-    st.markdown("## 📊 Nutrition")
+    st.markdown("## 🍽 Nutrition per Food")
+
+    for food, data in details:
+        st.write(f"### {food}")
+        st.write(data)
+        st.markdown("---")
+
+    st.markdown("## 📊 Total Nutrition")
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Calories", total["calories"])
@@ -196,21 +194,46 @@ if uploaded_files:
     df = pd.DataFrame.from_dict(total, orient='index', columns=['Value'])
     st.bar_chart(df)
 
-    # AI
-    st.markdown("## 🤖 AI Analysis")
-    ai_text = generate_ai_response(all_foods, total, age, weight, goal)
+    # -------------------------
+    # GEN AI
+    # -------------------------
+    st.markdown("## 🤖 Health Analysis")
+
+    with st.spinner("Generating insights..."):
+        ai_text = generate_ai_response(all_foods, total, age, weight, goal)
+
     st.write(ai_text)
 
-    # Audio
+    # -------------------------
+    # AUDIO
+    # -------------------------
     st.markdown("## 🔊 Audio Advice")
-    tips = analyze_nutrition(total)
 
-    summary = f"You ate {len(all_foods)} foods. Calories {total['calories']}. "
-    for t in tips:
-        summary += t + " "
-
-    audio = text_to_audio(summary)
+    audio = text_to_audio(ai_text[:200])
     st.audio(audio)
 
-    if os.path.exists(audio):
-        os.remove(audio)
+# -------------------------
+# CHATBOT (FIXED)
+# -------------------------
+st.markdown("## 💬 Chatbot")
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+user_input = st.chat_input("Ask about your diet...")
+
+if user_input:
+    st.session_state.messages.append({"role": "user", "content": user_input})
+
+    context = f"Foods: {all_foods if 'all_foods' in locals() else []}"
+
+    response = generate_ai_response(context, {}, age, weight, goal)
+
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+    with st.chat_message("assistant"):
+        st.markdown(response)
