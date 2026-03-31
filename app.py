@@ -41,7 +41,7 @@ classifier = load_model()
 USDA_API_KEY = st.secrets["USDA_API_KEY"]
 
 # -------------------------
-# BMI FUNCTION (FIXED ERROR)
+# BMI
 # -------------------------
 def calculate_bmi(weight, height):
     h = height / 100
@@ -57,6 +57,36 @@ def calculate_bmi(weight, height):
         status = "Obese"
 
     return round(bmi, 2), status
+
+# -------------------------
+# BMR (GENDER IMPACT)
+# -------------------------
+def calculate_bmr(weight, height, age, gender):
+    if gender == "Male":
+        return 10*weight + 6.25*height - 5*age + 5
+    else:
+        return 10*weight + 6.25*height - 5*age - 161
+
+# -------------------------
+# ICMR RDA
+# -------------------------
+def get_rda(age, weight, gender):
+    protein = round(0.8 * weight, 1)
+
+    if gender == "Male":
+        calories = 2500
+    else:
+        calories = 2000
+
+    carbs = round((0.5 * calories) / 4, 1)
+    fat = round((0.25 * calories) / 9, 1)
+
+    return {
+        "calories": calories,
+        "protein": protein,
+        "carbs": carbs,
+        "fat": fat
+    }
 
 # -------------------------
 # CLEAN FOOD
@@ -119,85 +149,82 @@ def calculate_total(foods):
     return total, details
 
 # -------------------------
-# DEFICIENCY
+# DEFICIENCY (RDA BASED)
 # -------------------------
-def analyze_deficiency(total):
+def analyze_deficiency(total, rda):
     tips = []
 
-    if total["protein"] < 50:
-        tips.append("Protein is low. Eat eggs, chicken, dal.")
-    if total["carbs"] < 130:
-        tips.append("Carbs are low. Eat rice, fruits.")
-    if total["fat"] < 20:
-        tips.append("Healthy fats are low. Eat nuts.")
-    if total["calories"] < 500:
-        tips.append("Calories are low. Increase food intake.")
+    if total["protein"] < rda["protein"]:
+        tips.append(f"Protein is low. Eat eggs, dal, paneer.")
+
+    if total["carbs"] < rda["carbs"]:
+        tips.append(f"Carbs are low. Eat rice, fruits.")
+
+    if total["fat"] < rda["fat"]:
+        tips.append(f"Healthy fats are low. Eat nuts.")
+
+    if total["calories"] < rda["calories"]:
+        tips.append(f"Calories are low. Increase food intake.")
 
     if not tips:
-        tips.append("Your diet is balanced.")
+        tips.append("Your diet meets recommended levels.")
 
     return tips
 
 # -------------------------
-# ADVANCED ANALYSIS (YOUR EXPECTED LOGIC)
+# ADVANCED ANALYSIS (UNCHANGED STYLE)
 # -------------------------
 def generate_analysis(foods, total, age, weight, height, gender, goal):
 
     bmi, status = calculate_bmi(weight, height)
-    deficiency = analyze_deficiency(total)
+    rda = get_rda(age, weight, gender)
+    deficiency = analyze_deficiency(total, rda)
 
     h = height / 100
     min_w = round(18.5 * (h*h), 1)
     max_w = round(24.9 * (h*h), 1)
 
-    # Goal validation
-    if status == "Normal":
-        if goal == "Weight Loss":
-            goal_msg = "You already have healthy weight. Weight loss not required."
-        elif goal == "Muscle Gain":
-            goal_msg = "Muscle gain is appropriate."
-        else:
-            goal_msg = "Maintaining weight is good."
-    elif status == "Underweight":
-        goal_msg = "You should gain weight."
-    elif status == "Overweight":
-        goal_msg = "Weight loss is recommended."
-    else:
-        goal_msg = "Strict weight loss required."
+    bmr = calculate_bmr(weight, height, age, gender)
 
-    # Age logic
-    if age < 18:
-        age_msg = "Growth stage. Balanced nutrition needed."
-    elif age <= 40:
-        age_msg = "Active age. Maintain balance."
+    # Goal logic
+    if status == "Normal" and goal == "Weight Loss":
+        goal_msg = "Weight loss not required."
+    elif status == "Underweight":
+        goal_msg = "Weight gain recommended."
+    elif status == "Overweight":
+        goal_msg = "Weight loss recommended."
     else:
-        age_msg = "Focus on heart health."
+        goal_msg = "Your goal is appropriate."
 
     return f"""
 ### 🧠 Personalized Health Analysis
 
-👤 Age: {age} → {age_msg}
+👤 Age: {age}  
+⚧ Gender: {gender}
 
 ⚖️ BMI: {bmi} → {status}  
-Ideal Weight: {min_w} - {max_w} kg
+Ideal Weight: {min_w}-{max_w} kg
 
-🎯 Goal: {goal_msg}
+🔥 BMR: {round(bmr)} kcal  
+
+📊 Recommended (ICMR):
+Calories: {rda['calories']}
+Protein: {rda['protein']}
+Fat: {rda['fat']}
+Carbs: {rda['carbs']}
 
 🍔 Foods: {foods}
 
-📊 Nutrition:
+📊 Your Intake:
 Calories: {total['calories']}
 Protein: {total['protein']}
 Fat: {total['fat']}
 Carbs: {total['carbs']}
 
+🎯 Goal: {goal_msg}
+
 ⚠️ Deficiencies:
 {', '.join(deficiency)}
-
-🥗 Advice:
-- Improve missing nutrients
-- Follow goal-based diet
-- Maintain healthy routine
 """
 
 # -------------------------
@@ -234,20 +261,16 @@ if uploaded_files:
     st.subheader("📊 Total Nutrition")
     st.write(total)
 
-    # -------------------------
     # ANALYSIS
-    # -------------------------
     st.subheader("🤖 Health Analysis")
-
     analysis = generate_analysis(all_foods, total, age, weight, height, gender, goal)
     st.write(analysis)
 
-    # -------------------------
-    # AUDIO (ONLY DEFICIENCY)
-    # -------------------------
-    st.subheader("🔊 Audio Advice")
+    # AUDIO (ONLY DEFICIENCY BASED)
+    st.subheader("🔊 Smart Audio Advice")
 
-    deficiency = analyze_deficiency(total)
+    rda = get_rda(age, weight, gender)
+    deficiency = analyze_deficiency(total, rda)
 
     audio_text = "Based on your diet, "
 
