@@ -6,10 +6,9 @@ from gtts import gTTS
 import tempfile
 import os
 import requests
-import time
 
 # -------------------------
-# PAGE CONFIG + UI
+# PAGE CONFIG
 # -------------------------
 st.set_page_config(page_title="GenAI Food Analyzer", layout="wide")
 
@@ -25,7 +24,7 @@ st.markdown("<p style='text-align:center;'>AI-powered food detection & smart hea
 st.markdown("---")
 
 # -------------------------
-# SIDEBAR
+# USER INPUT
 # -------------------------
 st.sidebar.title("👤 User Profile")
 age = st.sidebar.number_input("Age", 10, 80)
@@ -60,7 +59,7 @@ def clean_food(food):
     return mapping.get(food.lower(), food)
 
 # -------------------------
-# REAL NUTRITION (USDA)
+# USDA NUTRITION
 # -------------------------
 def get_nutrition(food):
     try:
@@ -102,49 +101,14 @@ def calculate_total(foods):
     for food in foods:
         data = get_nutrition(food)
         details.append((food, data))
-        for k in total:
-            total[k] += data[k]
+
+        for key in total:
+            total[key] += data[key]
 
     return total, details
 
 # -------------------------
-# GEN AI (HUGGING FACE)
-# -------------------------
-def generate_ai_response(foods, total):
-
-    prompt = f"""
-    Act as a nutrition expert.
-
-    Foods eaten: {foods}
-    Nutrition: {total}
-
-    Give:
-    - Health analysis
-    - What nutrients are missing
-    - What foods to eat next
-    """
-
-    API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-base"
-    headers = {"Authorization": f"Bearer {HF_API_KEY}"}
-
-    try:
-        response = requests.post(API_URL, headers=headers, json={"inputs": prompt}, timeout=20)
-        output = response.json()
-
-        if isinstance(output, list):
-            return output[0]["generated_text"]
-
-    except:
-        pass
-
-    # fallback
-    return f"""
-    You consumed {foods}. Your diet may be unbalanced.
-    Try adding protein, vegetables, and fruits for better health.
-    """
-
-# -------------------------
-# NUTRIENT DEFICIENCY
+# DEFICIENCY ANALYSIS
 # -------------------------
 def analyze_deficiency(total):
     advice = []
@@ -164,6 +128,53 @@ def analyze_deficiency(total):
     return advice
 
 # -------------------------
+# GEN AI (PERSONALIZED)
+# -------------------------
+def generate_ai_response(foods, total, age, weight, goal):
+
+    deficiency = analyze_deficiency(total)
+
+    prompt = f"""
+    You are a professional nutritionist.
+
+    User Details:
+    Age: {age}
+    Weight: {weight}
+    Goal: {goal}
+
+    Foods consumed: {foods}
+    Total nutrition: {total}
+
+    Nutrient deficiencies: {deficiency}
+
+    Provide:
+    1. Health analysis
+    2. Is diet suitable for goal?
+    3. Risks
+    4. What nutrients are lacking
+    5. What foods to eat next
+    """
+
+    API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-base"
+    headers = {"Authorization": f"Bearer {HF_API_KEY}"}
+
+    try:
+        response = requests.post(API_URL, headers=headers, json={"inputs": prompt}, timeout=20)
+        output = response.json()
+
+        if isinstance(output, list):
+            return output[0]["generated_text"]
+
+    except:
+        pass
+
+    # fallback
+    return f"""
+    Based on your goal ({goal}), your diet needs improvement.
+    Add protein, vegetables, and balanced meals.
+    """
+
+# -------------------------
 # AUDIO
 # -------------------------
 def text_to_audio(text):
@@ -175,11 +186,7 @@ def text_to_audio(text):
 # -------------------------
 # UPLOAD
 # -------------------------
-uploaded_files = st.file_uploader(
-    "📸 Upload Food Images",
-    type=["jpg","png","jpeg"],
-    accept_multiple_files=True
-)
+uploaded_files = st.file_uploader("📸 Upload Food Images", accept_multiple_files=True)
 
 if uploaded_files:
     all_foods = []
@@ -229,18 +236,18 @@ if uploaded_files:
     st.markdown("## 🤖 Health Analysis")
 
     with st.spinner("Generating AI insights..."):
-        ai_response = generate_ai_response(all_foods, total)
+        ai_response = generate_ai_response(all_foods, total, age, weight, goal)
 
     st.write(ai_response)
 
     # -------------------------
-    # AUDIO ADVICE (SMART)
+    # AUDIO
     # -------------------------
     st.markdown("## 🔊 Smart Audio Advice")
 
     deficiency = analyze_deficiency(total)
 
-    summary = f"You consumed {len(all_foods)} foods. "
+    summary = f"Based on your goal {goal}, "
 
     for tip in deficiency:
         summary += tip + " "
