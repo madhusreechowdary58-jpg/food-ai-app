@@ -53,7 +53,7 @@ def clean_food(food):
     return mapping.get(food.lower(), food)
 
 # -------------------------
-# USDA NUTRITION (ACCURATE)
+# USDA NUTRITION
 # -------------------------
 def get_nutrition(food):
     try:
@@ -86,7 +86,7 @@ def get_nutrition(food):
         return {"calories": 0, "protein": 0, "fat": 0, "carbs": 0}
 
 # -------------------------
-# TOTAL CALCULATION
+# TOTAL
 # -------------------------
 def calculate_total(foods):
     total = {"calories": 0, "protein": 0, "fat": 0, "carbs": 0}
@@ -102,21 +102,21 @@ def calculate_total(foods):
     return total, details
 
 # -------------------------
-# GEN AI RESPONSE (STABLE)
+# GEN AI (FOR MAIN ANALYSIS)
 # -------------------------
 def generate_ai_response(foods, total):
 
     prompt = f"""
-    Act as a nutrition expert.
+    Act as a professional nutritionist.
 
     Foods eaten: {foods}
     Nutrition: {total}
     Goal: {goal}
 
-    Give:
+    Provide:
     - Health analysis
     - Missing nutrients
-    - What foods to eat
+    - Food recommendations
     """
 
     API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-base"
@@ -132,37 +132,38 @@ def generate_ai_response(foods, total):
     except:
         pass
 
-    # fallback (IMPORTANT)
-    return f"""
-You consumed {foods}.
-Calories: {total['calories']}
-
-Your diet may lack protein and fiber.
-Eat eggs, dal, fruits, vegetables.
-"""
+    return "Basic advice: Maintain balanced diet with protein, fruits and vegetables."
 
 # -------------------------
-# DEFICIENCY ANALYSIS (AUDIO)
+# CHATBOT FUNCTION (FIXED)
 # -------------------------
-def analyze_nutrition(total):
-    advice = []
+def generate_chatbot_response(user_input, foods, total):
 
-    if total["protein"] < 50:
-        advice.append("Protein is low. Eat eggs, chicken, paneer, or dal.")
+    prompt = f"""
+    You are a helpful nutrition assistant.
 
-    if total["carbs"] < 130:
-        advice.append("Carbohydrates are low. Add rice, fruits, or oats.")
+    User ate: {foods}
+    Nutrition: {total}
 
-    if total["fat"] < 20:
-        advice.append("Healthy fats are low. Add nuts and seeds.")
+    User question: {user_input}
 
-    if total["calories"] < 500:
-        advice.append("Calories are low. Increase balanced meals.")
+    Give a clear and direct answer.
+    """
 
-    if not advice:
-        advice.append("Your diet is balanced. Keep it up.")
+    API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-base"
+    headers = {"Authorization": f"Bearer {HF_API_KEY}"}
 
-    return advice
+    try:
+        response = requests.post(API_URL, headers=headers, json={"inputs": prompt}, timeout=15)
+        output = response.json()
+
+        if isinstance(output, list):
+            return output[0]["generated_text"]
+
+    except:
+        pass
+
+    return "Try asking: Is my diet healthy? What should I eat next?"
 
 # -------------------------
 # AUDIO
@@ -174,7 +175,7 @@ def text_to_audio(text):
     return file.name
 
 # -------------------------
-# IMAGE UPLOAD
+# UPLOAD
 # -------------------------
 uploaded_files = st.file_uploader("📸 Upload Food Images", accept_multiple_files=True)
 
@@ -186,19 +187,14 @@ if uploaded_files:
         st.image(image, caption=f"Image {i+1}")
 
         results = classifier(image)
-
         food = results[0]["label"].replace("_", " ")
         all_foods.append(food)
 
         st.success(f"Detected: {food}")
 
-    # -------------------------
-    # NUTRITION
-    # -------------------------
     total, details = calculate_total(all_foods)
 
     st.subheader("🍽 Nutrition per Food")
-
     for food, data in details:
         st.write(f"### {food}")
         st.write(data)
@@ -210,33 +206,19 @@ if uploaded_files:
     df = pd.DataFrame.from_dict(total, orient='index', columns=['Value'])
     st.bar_chart(df)
 
-    # -------------------------
     # AI ANALYSIS
-    # -------------------------
     st.subheader("🤖 Health Analysis")
     ai_response = generate_ai_response(all_foods, total)
     st.write(ai_response)
 
-    # -------------------------
-    # AUDIO ADVICE
-    # -------------------------
-    st.subheader("🔊 Smart Audio Advice")
-
-    tips = analyze_nutrition(total)
-
-    summary = f"You consumed {len(all_foods)} foods. "
-
-    for tip in tips:
-        summary += tip + " "
-
+    # AUDIO
+    st.subheader("🔊 Audio Advice")
+    summary = f"You consumed {len(all_foods)} foods. Calories {total['calories']}."
     audio_file = text_to_audio(summary)
     st.audio(audio_file)
 
-    if os.path.exists(audio_file):
-        os.remove(audio_file)
-
 # -------------------------
-# CHATBOT (FIXED)
+# CHATBOT UI (FIXED)
 # -------------------------
 st.subheader("💬 Chatbot")
 
@@ -252,7 +234,11 @@ user_input = st.chat_input("Ask about your diet...")
 if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
 
-    response = generate_ai_response(
+    with st.chat_message("user"):
+        st.markdown(user_input)
+
+    response = generate_chatbot_response(
+        user_input,
         all_foods if 'all_foods' in locals() else [],
         total if 'total' in locals() else {"calories":0,"protein":0,"fat":0,"carbs":0}
     )
