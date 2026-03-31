@@ -4,5 +4,4 @@ torch
 pillow
 pandas
 gtts
-openai
 requests
