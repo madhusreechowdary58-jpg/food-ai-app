@@ -102,23 +102,57 @@ def calculate_total(foods):
     return total, details
 
 # -------------------------
-# BMI CALCULATION
 # -------------------------
-def calculate_bmi(weight, height):
-    h = height / 100
-    bmi = weight / (h * h)
+# ADVANCED AI LOGIC (NO FAIL)
+# -------------------------
+def generate_analysis(foods, total, age, weight, height, gender, goal):
 
-    if bmi < 18.5:
-        status = "Underweight"
-    elif bmi < 25:
-        status = "Normal"
-    elif bmi < 30:
-        status = "Overweight"
+    bmi, status = calculate_bmi(weight, height)
+    deficiency = analyze_deficiency(total)
+
+    # Goal validation
+    goal_msg = ""
+    if status == "Normal" and goal == "Weight Loss":
+        goal_msg = "You already have normal weight. Weight loss is not required."
+    elif status == "Underweight" and goal == "Weight Loss":
+        goal_msg = "Weight loss is dangerous for your condition."
+    elif status == "Overweight" and goal == "Muscle Gain":
+        goal_msg = "Focus on fat loss before muscle gain."
     else:
-        status = "Obese"
+        goal_msg = "Your goal is appropriate."
 
-    return round(bmi, 2), status
+    # Age logic
+    if age < 18:
+        age_msg = "You are young. Balanced nutrition is very important for growth."
+    elif age > 50:
+        age_msg = "Focus on low fat and heart-healthy diet."
+    else:
+        age_msg = "Maintain balanced adult diet."
 
+    return f"""
+### 🧠 Personalized Health Analysis
+
+👤 Age: {age} ({age_msg})  
+⚖️ BMI: {bmi} → {status}  
+
+🎯 Goal Check: {goal_msg}
+
+🍔 Foods Consumed: {foods}
+
+📊 Nutrition:
+Calories: {total['calories']}
+Protein: {total['protein']}
+Fat: {total['fat']}
+Carbs: {total['carbs']}
+
+⚠️ Deficiencies:
+{', '.join(deficiency)}
+
+🥗 Recommendations:
+- Adjust diet based on BMI status
+- Add missing nutrients
+- Follow goal-oriented diet
+"""
 # -------------------------
 # DEFICIENCY ANALYSIS
 # -------------------------
