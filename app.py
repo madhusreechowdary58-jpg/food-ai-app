@@ -1,11 +1,10 @@
 import streamlit as st
 from transformers import pipeline
 from PIL import Image
-import requests
+import pandas as pd
 from gtts import gTTS
 import tempfile
 import os
-import pandas as pd
 
 # -------------------------
 # PAGE CONFIG
@@ -34,10 +33,9 @@ def load_model():
 classifier = load_model()
 
 # -------------------------
-# NUTRITION (Fallback)
+# NUTRITION DATA
 # -------------------------
 def get_nutrition(food):
-    # Simple fallback values (no API needed)
     sample_data = {
         "pizza": {"calories": 285, "protein": 12, "fat": 10, "carbs": 36},
         "burger": {"calories": 295, "protein": 17, "fat": 12, "carbs": 30},
@@ -73,20 +71,19 @@ You consumed: {', '.join(foods)}
 Total Calories: {total['calories']} kcal
 Protein: {total['protein']} g
 Fat: {total['fat']} g
-Carbohydrates: {total['carbs']} g
+Carbs: {total['carbs']} g
 
 Health Analysis:
 - This meal is {'high' if total['fat'] > 30 else 'moderate'} in fat.
 - {'High calorie intake' if total['calories'] > 700 else 'Balanced calorie level'}.
 
-Personalized Advice:
+Advice:
 - Based on your goal ({goal}), adjust portion size.
 - Add vegetables and fiber-rich foods.
-- Reduce fried or processed foods.
 """
 
 # -------------------------
-# TEXT TO AUDIO
+# AUDIO
 # -------------------------
 def text_to_audio(text):
     tts = gTTS(text=text)
@@ -95,41 +92,45 @@ def text_to_audio(text):
     return temp_file.name
 
 # -------------------------
-# IMAGE INPUT
+# MULTIPLE IMAGE UPLOAD
 # -------------------------
-uploaded_file = st.file_uploader("📸 Upload Food Image", type=["jpg", "png", "jpeg"])
+uploaded_files = st.file_uploader(
+    "📸 Upload Food Images",
+    type=["jpg", "png", "jpeg"],
+    accept_multiple_files=True
+)
 
-if uploaded_file:
-    image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Image", use_column_width=True)
+if uploaded_files:
+    all_foods = []
 
-    st.info("🔍 Analyzing food...")
+    for i, uploaded_file in enumerate(uploaded_files):
+        image = Image.open(uploaded_file)
+
+        st.image(image, caption=f"Image {i+1}", use_column_width=True)
+
+        st.info("🔍 Analyzing...")
+
+        results = classifier(image)
+
+        # ✅ ONLY TOP-1 FOOD
+        food = results[0]["label"].replace("_", " ")
+        all_foods.append(food)
+
+        st.success(f"Detected: {food}")
 
     # -------------------------
-    # FOOD CLASSIFICATION
+    # TOTAL NUTRITION
     # -------------------------
-    results = classifier(image)
-    foods = [res["label"].replace("_", " ") for res in results[:3]]
+    st.subheader("🍽 Combined Nutrition")
 
-    st.success(f"Detected Foods: {foods}")
-
-    # -------------------------
-    # NUTRITION
-    # -------------------------
-    st.subheader("🍽 Nutrition Breakdown")
-
-    total, details = calculate_total(foods)
+    total, details = calculate_total(all_foods)
 
     for food, data in details:
         st.write(f"**{food}** → {data}")
 
-    # -------------------------
-    # TOTAL
-    # -------------------------
     st.subheader("📊 Total Nutrition")
     st.write(total)
 
-    # Chart
     df = pd.DataFrame.from_dict(total, orient='index', columns=['Value'])
     st.bar_chart(df)
 
@@ -137,24 +138,24 @@ if uploaded_file:
     # ALERTS
     # -------------------------
     if total["fat"] > 30:
-        st.error("⚠️ High fat intake detected!")
+        st.error("⚠️ High fat intake!")
 
     if total["calories"] > 700:
-        st.warning("⚠️ High calorie meal!")
+        st.warning("⚠️ High calorie intake!")
 
     # -------------------------
     # AI ANALYSIS
     # -------------------------
     st.subheader("🤖 Health Analysis")
-    ai_response = generate_ai_response(foods, total)
+    ai_response = generate_ai_response(all_foods, total)
     st.write(ai_response)
 
     # -------------------------
-    # AUDIO
+    # AUDIO OUTPUT
     # -------------------------
     st.subheader("🔊 Audio Summary")
 
-    summary = f"Your meal has {total['calories']} calories. It is {'high' if total['fat'] > 30 else 'moderate'} in fat."
+    summary = f"You consumed {len(all_foods)} items with {total['calories']} calories."
 
     audio_file = text_to_audio(summary)
     st.audio(audio_file)
