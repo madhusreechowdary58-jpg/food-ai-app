@@ -103,55 +103,105 @@ def calculate_total(foods):
 
 # -------------------------
 # -------------------------
-# ADVANCED AI LOGIC (NO FAIL)
+# ADVANCED AI LOGIC (STRONG + REALISTIC)
 # -------------------------
 def generate_analysis(foods, total, age, weight, height, gender, goal):
 
     bmi, status = calculate_bmi(weight, height)
     deficiency = analyze_deficiency(total)
 
-    # Goal validation
-    goal_msg = ""
-    if status == "Normal" and goal == "Weight Loss":
-        goal_msg = "You already have normal weight. Weight loss is not required."
-    elif status == "Underweight" and goal == "Weight Loss":
-        goal_msg = "Weight loss is dangerous for your condition."
-    elif status == "Overweight" and goal == "Muscle Gain":
-        goal_msg = "Focus on fat loss before muscle gain."
-    else:
-        goal_msg = "Your goal is appropriate."
+    # -------------------------
+    # IDEAL WEIGHT RANGE (approx)
+    # -------------------------
+    h = height / 100
+    min_w = round(18.5 * (h*h), 1)
+    max_w = round(24.9 * (h*h), 1)
 
-    # Age logic
+    # -------------------------
+    # GOAL VALIDATION
+    # -------------------------
+    if status == "Normal":
+        if goal == "Weight Loss":
+            goal_msg = "You already have a healthy weight. Weight loss is not necessary."
+        elif goal == "Muscle Gain":
+            goal_msg = "Muscle gain is appropriate if you focus on strength and protein intake."
+        else:
+            goal_msg = "Maintaining your current weight is a good choice."
+    elif status == "Underweight":
+        if goal == "Weight Loss":
+            goal_msg = "Weight loss is dangerous for your condition."
+        else:
+            goal_msg = "You should focus on healthy weight gain."
+    elif status == "Overweight":
+        if goal == "Muscle Gain":
+            goal_msg = "You should reduce fat first before focusing on muscle gain."
+        else:
+            goal_msg = "Weight loss is recommended for better health."
+    else:
+        goal_msg = "Strict weight reduction is required for health improvement."
+
+    # -------------------------
+    # AGE BASED LOGIC
+    # -------------------------
     if age < 18:
-        age_msg = "You are young. Balanced nutrition is very important for growth."
-    elif age > 50:
-        age_msg = "Focus on low fat and heart-healthy diet."
+        age_msg = "You are in a growth stage. Balanced nutrition is very important."
+    elif age <= 40:
+        age_msg = "You are in an active age group. Maintain a balanced diet."
     else:
-        age_msg = "Maintain balanced adult diet."
+        age_msg = "Focus on heart health and controlled diet."
 
+    # -------------------------
+    # GENDER BASED NOTE
+    # -------------------------
+    if gender == "Male":
+        gender_msg = "Males generally require higher calories and protein."
+    else:
+        gender_msg = "Females require balanced nutrition with proper iron intake."
+
+    # -------------------------
+    # CALORIE INTERPRETATION
+    # -------------------------
+    if total["calories"] < 500:
+        calorie_msg = "Your calorie intake is too low."
+    elif total["calories"] > 900:
+        calorie_msg = "Your calorie intake is high."
+    else:
+        calorie_msg = "Your calorie intake is moderate."
+
+    # -------------------------
+    # FINAL OUTPUT
+    # -------------------------
     return f"""
 ### 🧠 Personalized Health Analysis
 
-👤 Age: {age} ({age_msg})  
-⚖️ BMI: {bmi} → {status}  
+👤 Age: {age}  
+➡️ {age_msg}
 
-🎯 Goal Check: {goal_msg}
+⚧ Gender: {gender}  
+➡️ {gender_msg}
+
+⚖️ BMI: {bmi} → {status}  
+➡️ Ideal weight range: {min_w} kg to {max_w} kg
+
+🎯 Goal Evaluation:  
+➡️ {goal_msg}
 
 🍔 Foods Consumed: {foods}
 
-📊 Nutrition:
-Calories: {total['calories']}
-Protein: {total['protein']}
-Fat: {total['fat']}
-Carbs: {total['carbs']}
+📊 Nutrition Summary:
+- Calories: {total['calories']} → {calorie_msg}
+- Protein: {total['protein']} g
+- Fat: {total['fat']} g
+- Carbohydrates: {total['carbs']} g
 
-⚠️ Deficiencies:
+⚠️ Nutrient Deficiencies:
 {', '.join(deficiency)}
 
-🥗 Recommendations:
-- Adjust diet based on BMI status
-- Add missing nutrients
-- Follow goal-oriented diet
+🥗 Personalized Recommendations:
+- Adjust diet according to BMI status
+- Include missing nutrients in daily meals
+- Follow a goal-oriented balanced diet
+- Maintain proper meal timing and hydration
 """
 # -------------------------
 # DEFICIENCY ANALYSIS
