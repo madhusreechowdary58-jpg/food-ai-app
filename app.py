@@ -12,7 +12,7 @@ import requests
 # -------------------------
 st.set_page_config(page_title="AI Food Health Analyzer", layout="wide")
 
-st.title("🍔 AI Food & Health Analyzer")
+st.title("🍔 GenAI Food & Health Analyzer")
 st.markdown("---")
 
 # -------------------------
