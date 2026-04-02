@@ -202,7 +202,7 @@ def evaluate_food_health(foods, total, bmi, goal, age):
     return feedback
 
 # -------------------------
-# GOAL SUITABILITY (NEW)
+# GOAL SUITABILITY
 # -------------------------
 def evaluate_goal(bmi, goal):
 
@@ -216,12 +216,12 @@ def evaluate_goal(bmi, goal):
         if goal == "Muscle Gain":
             return "⚠️ You are overweight. Focus on fat loss first."
         elif goal == "Maintain":
-            return "⚠️ Consider weight loss instead of maintaining."
+            return "⚠️ Consider weight loss instead."
         else:
             return "✅ Your goal aligns with your health."
 
     else:
-        return "✅ Your goal is suitable for your body condition."
+        return "✅ Your goal is suitable."
 
 # -------------------------
 # ANALYSIS
@@ -300,7 +300,7 @@ if uploaded_files:
 
     total, details = calculate_total(all_foods)
 
-    # FOOD LIST
+    # DETECTED FOODS
     st.subheader("🍔 Detected Food Items")
     for f in all_foods:
         st.success(f)
@@ -322,20 +322,23 @@ if uploaded_files:
         st.metric("Vitamins", round(total["vitamins"],1))
 
     with col2:
-        st.markdown("### 🟢 Nutrient Activity Rings")
+        st.markdown("### 🟢 Nutrient Progress Rings")
 
-        labels = ["Carbs", "Protein", "Fat", "Vitamins"]
-        values = [total["carbs"], total["protein"], total["fat"], total["vitamins"]]
+        rda = get_rda(age, weight, height, gender)
 
-        max_val = max(values) if max(values) > 0 else 1
-        normalized = [v / max_val for v in values]
+        carbs_p = min(total["carbs"] / rda["carbs"], 1)
+        protein_p = min(total["protein"] / rda["protein"], 1)
+        fat_p = min(total["fat"] / rda["fat"], 1)
+        vit_p = min(total["vitamins"] / 100, 1)
+
+        progress = [carbs_p, protein_p, fat_p, vit_p]
+        colors = ["#00C2FF", "#00FF7F", "#FF7F50", "#FFD700"]
 
         fig, ax = plt.subplots(figsize=(5,5))
-        colors = ["#FF5733", "#33C1FF", "#33FF57", "#FFC300"]
 
-        for i, val in enumerate(normalized):
+        for i, p in enumerate(progress):
             ax.pie(
-                [val, 1-val],
+                [p, 1-p],
                 radius=1 - i*0.2,
                 colors=[colors[i], "#2E2E2E"],
                 startangle=90,
@@ -346,12 +349,14 @@ if uploaded_files:
         ax.set(aspect="equal")
         st.pyplot(fig)
 
-    # HEALTH ANALYSIS
+        st.caption("Outer → Carbs | Inner → Vitamins (Progress towards daily requirement)")
+
+    # ANALYSIS
     st.subheader("🤖 Health Analysis")
     analysis = generate_analysis(all_foods, total, age, weight, height, gender, goal)
     st.write(analysis)
 
-    # GOAL ANALYSIS
+    # GOAL CHECK
     st.subheader("🎯 Goal Suitability Analysis")
     bmi, _ = calculate_bmi(weight, height)
     st.info(evaluate_goal(bmi, goal))
@@ -360,8 +365,8 @@ if uploaded_files:
     st.subheader("🔊 Smart Audio Advice")
 
     feedback = evaluate_food_health(all_foods, total, bmi, goal, age)
-    audio_text = "Health advice: "
 
+    audio_text = "Health advice: "
     for f in feedback:
         audio_text += f + " "
 
