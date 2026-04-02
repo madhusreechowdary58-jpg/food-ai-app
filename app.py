@@ -51,15 +51,13 @@ def calculate_bmi(weight, height):
     bmi = weight / (h * h)
 
     if bmi < 18.5:
-        status = "Underweight"
+        return round(bmi, 2), "Underweight"
     elif bmi < 25:
-        status = "Normal"
+        return round(bmi, 2), "Normal"
     elif bmi < 30:
-        status = "Overweight"
+        return round(bmi, 2), "Overweight"
     else:
-        status = "Obese"
-
-    return round(bmi, 2), status
+        return round(bmi, 2), "Obese"
 
 # -------------------------
 # BMR
@@ -173,11 +171,11 @@ def evaluate_food_health(foods, total, bmi, goal, age):
     junk_items = [f for f in foods if any(j in f.lower() for j in unhealthy)]
 
     if bmi > 25:
-        feedback.append("You are overweight. High-calorie foods increase fat storage and may lead to obesity and heart disease.")
+        feedback.append("You are overweight. High-calorie foods increase fat storage and may lead to heart disease.")
     elif bmi < 18.5:
         feedback.append("You are underweight. Low-nutrient foods will not help in healthy weight gain.")
     else:
-        feedback.append("Your BMI is normal. Maintaining a balanced diet is important.")
+        feedback.append("Your BMI is normal. Maintaining diet quality is important.")
 
     if junk_items:
         feedback.append(f"The foods {', '.join(junk_items)} are unhealthy.")
@@ -202,6 +200,28 @@ def evaluate_food_health(foods, total, bmi, goal, age):
         feedback.append("Foods are healthy in moderation.")
 
     return feedback
+
+# -------------------------
+# GOAL SUITABILITY (NEW)
+# -------------------------
+def evaluate_goal(bmi, goal):
+
+    if bmi < 18.5:
+        if goal == "Weight Loss":
+            return "❌ You are underweight. Weight loss is not recommended."
+        else:
+            return "✅ Your goal is appropriate."
+
+    elif bmi > 25:
+        if goal == "Muscle Gain":
+            return "⚠️ You are overweight. Focus on fat loss first."
+        elif goal == "Maintain":
+            return "⚠️ Consider weight loss instead of maintaining."
+        else:
+            return "✅ Your goal aligns with your health."
+
+    else:
+        return "✅ Your goal is suitable for your body condition."
 
 # -------------------------
 # ANALYSIS
@@ -280,17 +300,17 @@ if uploaded_files:
 
     total, details = calculate_total(all_foods)
 
-    # 🍔 Detected Foods
+    # FOOD LIST
     st.subheader("🍔 Detected Food Items")
     for f in all_foods:
         st.success(f)
 
-    # 📊 Per Food
+    # PER FOOD
     st.subheader("📊 Per Food Nutrients")
     for f, d in details:
         st.write(f"{f} → Carbs:{round(d['carbs'],1)}, Protein:{round(d['protein'],1)}, Fat:{round(d['fat'],1)}, Vitamins:{round(d['vitamins'],1)}")
 
-    # 📊 TOTAL + GRAPH
+    # TOTAL + RINGS
     st.subheader("📊 Total Nutrient Consumption")
 
     col1, col2 = st.columns(2)
@@ -302,27 +322,46 @@ if uploaded_files:
         st.metric("Vitamins", round(total["vitamins"],1))
 
     with col2:
+        st.markdown("### 🟢 Nutrient Activity Rings")
+
         labels = ["Carbs", "Protein", "Fat", "Vitamins"]
         values = [total["carbs"], total["protein"], total["fat"], total["vitamins"]]
 
-        fig, ax = plt.subplots()
-        ax.pie(values, labels=labels, autopct='%1.1f%%', wedgeprops=dict(width=0.4))
-        ax.set_title("Nutrient Distribution")
+        max_val = max(values) if max(values) > 0 else 1
+        normalized = [v / max_val for v in values]
 
+        fig, ax = plt.subplots(figsize=(5,5))
+        colors = ["#FF5733", "#33C1FF", "#33FF57", "#FFC300"]
+
+        for i, val in enumerate(normalized):
+            ax.pie(
+                [val, 1-val],
+                radius=1 - i*0.2,
+                colors=[colors[i], "#2E2E2E"],
+                startangle=90,
+                counterclock=False,
+                wedgeprops=dict(width=0.15)
+            )
+
+        ax.set(aspect="equal")
         st.pyplot(fig)
 
-    # 🤖 Analysis
+    # HEALTH ANALYSIS
     st.subheader("🤖 Health Analysis")
     analysis = generate_analysis(all_foods, total, age, weight, height, gender, goal)
     st.write(analysis)
 
-    # 🔊 Audio
+    # GOAL ANALYSIS
+    st.subheader("🎯 Goal Suitability Analysis")
+    bmi, _ = calculate_bmi(weight, height)
+    st.info(evaluate_goal(bmi, goal))
+
+    # AUDIO
     st.subheader("🔊 Smart Audio Advice")
 
-    bmi, _ = calculate_bmi(weight, height)
     feedback = evaluate_food_health(all_foods, total, bmi, goal, age)
-
     audio_text = "Health advice: "
+
     for f in feedback:
         audio_text += f + " "
 
