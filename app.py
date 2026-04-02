@@ -5,6 +5,7 @@ from gtts import gTTS
 import tempfile
 import os
 import requests
+import matplotlib.pyplot as plt
 
 # -------------------------
 # PAGE CONFIG
@@ -22,7 +23,6 @@ st.sidebar.header("👤 User Profile")
 age = st.sidebar.number_input("Age", 5, 80)
 weight = st.sidebar.number_input("Weight (kg)", 20, 150)
 
-# Height in feet (min 1)
 height_ft = st.sidebar.number_input("Height (feet)", 1.0, 7.0, step=0.1)
 height = round(height_ft * 30.48)
 
@@ -95,7 +95,7 @@ def clean_food(food):
     return mapping.get(food.lower(), food)
 
 # -------------------------
-# USDA
+# USDA NUTRITION
 # -------------------------
 def get_nutrition(food):
     try:
@@ -103,7 +103,7 @@ def get_nutrition(food):
         url = f"https://api.nal.usda.gov/fdc/v1/foods/search?query={food}&api_key={USDA_API_KEY}"
         res = requests.get(url).json()
 
-        nutrients = {"calories": 0, "protein": 0, "fat": 0, "carbs": 0}
+        nutrients = {"calories": 0, "protein": 0, "fat": 0, "carbs": 0, "vitamins": 0}
 
         foods = res.get("foods", [])
         if not foods:
@@ -120,16 +120,18 @@ def get_nutrition(food):
                 nutrients["fat"] = item["value"]
             elif "carbohydrate" in name:
                 nutrients["carbs"] = item["value"]
+            elif "vitamin" in name:
+                nutrients["vitamins"] += item["value"]
 
         return nutrients
     except:
-        return {"calories": 0, "protein": 0, "fat": 0, "carbs": 0}
+        return {"calories": 0, "protein": 0, "fat": 0, "carbs": 0, "vitamins": 0}
 
 # -------------------------
 # TOTAL
 # -------------------------
 def calculate_total(foods):
-    total = {"calories": 0, "protein": 0, "fat": 0, "carbs": 0}
+    total = {"calories": 0, "protein": 0, "fat": 0, "carbs": 0, "vitamins": 0}
     details = []
 
     for food in foods:
@@ -149,23 +151,19 @@ def analyze_deficiency(total, rda):
 
     if total["protein"] < 0.8 * rda["protein"]:
         tips.append("Protein is low. Eat eggs, dal, paneer.")
-
     if total["carbs"] < 0.8 * rda["carbs"]:
         tips.append("Carbs are low. Eat rice, fruits.")
-
     if total["fat"] < 0.8 * rda["fat"]:
         tips.append("Healthy fats are low. Add nuts.")
-
     if total["calories"] > 1.2 * rda["calories"]:
         tips.append("Calories are high. Reduce junk food.")
-
     if total["calories"] < 0.8 * rda["calories"]:
         tips.append("Calories are low. Increase intake.")
 
     return tips if tips else ["Diet is balanced."]
 
 # -------------------------
-# 🔥 FOOD SUITABILITY (ENHANCED)
+# FOOD SUITABILITY
 # -------------------------
 def evaluate_food_health(foods, total, bmi, goal, age):
 
@@ -174,52 +172,46 @@ def evaluate_food_health(foods, total, bmi, goal, age):
 
     junk_items = [f for f in foods if any(j in f.lower() for j in unhealthy)]
 
-    # BMI reasoning
     if bmi > 25:
         feedback.append("You are overweight. High-calorie foods increase fat storage and may lead to obesity and heart disease.")
     elif bmi < 18.5:
         feedback.append("You are underweight. Low-nutrient foods will not help in healthy weight gain.")
     else:
-        feedback.append("Your BMI is normal. Maintaining a balanced diet is important for long-term health.")
+        feedback.append("Your BMI is normal. Maintaining a balanced diet is important.")
 
-    # Food reasoning
     if junk_items:
         feedback.append(f"The foods {', '.join(junk_items)} are unhealthy.")
-
-        feedback.append("These foods are high in unhealthy fats, sugar, and low in essential nutrients like protein and vitamins.")
+        feedback.append("These foods contain high unhealthy fats, sugar, and low nutrients.")
 
         if age < 18:
-            feedback.append("At your age, frequent intake may affect growth, immunity, and energy levels.")
+            feedback.append("May affect growth and immunity.")
         elif age <= 40:
-            feedback.append("At this stage, it may lead to weight gain, poor metabolism, and fatigue.")
+            feedback.append("May lead to weight gain and poor metabolism.")
         else:
-            feedback.append("At this age, it increases risk of heart disease, high cholesterol, and diabetes.")
+            feedback.append("Increases heart and cholesterol risks.")
 
         if goal == "Weight Loss":
-            feedback.append("This meal is not suitable for weight loss because it is high in calories and low in nutrients.")
-
+            feedback.append("Not suitable for weight loss.")
         if goal == "Muscle Gain":
-            feedback.append("This meal does not support muscle growth due to low protein content.")
+            feedback.append("Does not support muscle growth.")
 
-        feedback.append("Avoid frequent intake of fried, processed, and sugary foods.")
-        feedback.append("Instead, eat vegetables, fruits, whole grains, and protein-rich foods like eggs, dal, and paneer.")
+        feedback.append("Avoid fried and processed foods.")
+        feedback.append("Eat vegetables, fruits, whole grains, and proteins.")
 
     else:
-        feedback.append("The detected foods are generally healthy if consumed in proper quantity.")
+        feedback.append("Foods are healthy in moderation.")
 
     return feedback
 
 # -------------------------
-# ANALYSIS (ONLY ADDED SECTION)
+# ANALYSIS
 # -------------------------
 def generate_analysis(foods, total, age, weight, height, gender, goal):
 
     bmi, status = calculate_bmi(weight, height)
     rda = get_rda(age, weight, height, gender)
     deficiency = analyze_deficiency(total, rda)
-
-    # 🔥 NEW ADDITION
-    food_feedback = evaluate_food_health(foods, total, bmi, goal, age)
+    feedback = evaluate_food_health(foods, total, bmi, goal, age)
 
     h = height / 100
     min_w = round(18.5*(h*h),1)
@@ -255,14 +247,14 @@ Fat: {round(total['fat'],1)}
 Carbs: {round(total['carbs'],1)}
 
 🧾 Food Suitability & Health Impact:
-{chr(10).join(food_feedback)}
+{chr(10).join(feedback)}
 
 ⚠️ Nutritional Feedback:
 {', '.join(deficiency)}
 """
 
 # -------------------------
-# AUDIO (ENHANCED)
+# AUDIO
 # -------------------------
 def text_to_audio(text):
     tts = gTTS(text)
@@ -288,14 +280,43 @@ if uploaded_files:
 
     total, details = calculate_total(all_foods)
 
-    st.subheader("📊 Total Nutrition")
-    st.write(total)
+    # 🍔 Detected Foods
+    st.subheader("🍔 Detected Food Items")
+    for f in all_foods:
+        st.success(f)
 
+    # 📊 Per Food
+    st.subheader("📊 Per Food Nutrients")
+    for f, d in details:
+        st.write(f"{f} → Carbs:{round(d['carbs'],1)}, Protein:{round(d['protein'],1)}, Fat:{round(d['fat'],1)}, Vitamins:{round(d['vitamins'],1)}")
+
+    # 📊 TOTAL + GRAPH
+    st.subheader("📊 Total Nutrient Consumption")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.metric("Carbs", round(total["carbs"],1))
+        st.metric("Protein", round(total["protein"],1))
+        st.metric("Fat", round(total["fat"],1))
+        st.metric("Vitamins", round(total["vitamins"],1))
+
+    with col2:
+        labels = ["Carbs", "Protein", "Fat", "Vitamins"]
+        values = [total["carbs"], total["protein"], total["fat"], total["vitamins"]]
+
+        fig, ax = plt.subplots()
+        ax.pie(values, labels=labels, autopct='%1.1f%%', wedgeprops=dict(width=0.4))
+        ax.set_title("Nutrient Distribution")
+
+        st.pyplot(fig)
+
+    # 🤖 Analysis
     st.subheader("🤖 Health Analysis")
     analysis = generate_analysis(all_foods, total, age, weight, height, gender, goal)
     st.write(analysis)
 
-    # AUDIO
+    # 🔊 Audio
     st.subheader("🔊 Smart Audio Advice")
 
     bmi, _ = calculate_bmi(weight, height)
