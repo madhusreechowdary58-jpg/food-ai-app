@@ -322,7 +322,7 @@ if uploaded_files:
         st.metric("Vitamins", round(total["vitamins"],1))
 
     with col2:
-        st.markdown("### 🟢 Nutrient Progress Rings")
+        st.markdown("### 🟢 Nutrient Activity Rings")
 
         rda = get_rda(age, weight, height, gender)
 
@@ -334,29 +334,48 @@ if uploaded_files:
         progress = [carbs_p, protein_p, fat_p, vit_p]
         colors = ["#00C2FF", "#00FF7F", "#FF7F50", "#FFD700"]
 
-        fig, ax = plt.subplots(figsize=(5,5))
+        fig, ax = plt.subplots(figsize=(6,6))
+        fig.patch.set_facecolor("#0E1117")
+        ax.set_facecolor("#0E1117")
 
         for i, p in enumerate(progress):
             ax.pie(
                 [p, 1-p],
-                radius=1 - i*0.2,
-                colors=[colors[i], "#2E2E2E"],
+                radius=1 - i*0.18,
                 startangle=90,
                 counterclock=False,
-                wedgeprops=dict(width=0.15)
+                colors=[colors[i], "#1f1f1f"],
+                wedgeprops=dict(width=0.13, edgecolor="none")
             )
 
+        centre_circle = plt.Circle((0, 0), 0.35, color="#0E1117")
+        ax.add_artist(centre_circle)
+
         ax.set(aspect="equal")
+        ax.axis('off')
+
         st.pyplot(fig)
 
-        st.caption("Outer → Carbs | Inner → Vitamins (Progress towards daily requirement)")
+        # LEGEND
+        st.markdown("### 🏷️ Nutrient Legend")
+        c1, c2, c3, c4 = st.columns(4)
+
+        with c1:
+            st.markdown("🔵 **Carbs**")
+        with c2:
+            st.markdown("🟢 **Protein**")
+        with c3:
+            st.markdown("🟠 **Fat**")
+        with c4:
+            st.markdown("🟡 **Vitamins**")
+
 
     # ANALYSIS
     st.subheader("🤖 Health Analysis")
     analysis = generate_analysis(all_foods, total, age, weight, height, gender, goal)
     st.write(analysis)
 
-    # GOAL CHECK
+    # GOAL
     st.subheader("🎯 Goal Suitability Analysis")
     bmi, _ = calculate_bmi(weight, height)
     st.info(evaluate_goal(bmi, goal))
@@ -365,8 +384,8 @@ if uploaded_files:
     st.subheader("🔊 Smart Audio Advice")
 
     feedback = evaluate_food_health(all_foods, total, bmi, goal, age)
-
     audio_text = "Health advice: "
+
     for f in feedback:
         audio_text += f + " "
 
