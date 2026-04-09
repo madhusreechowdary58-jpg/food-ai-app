@@ -5,3 +5,4 @@ Pillow
 gtts
 requests
 matplotlib
+openai
