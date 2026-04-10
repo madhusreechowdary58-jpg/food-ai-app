@@ -34,7 +34,8 @@ def load_food_model():
 
 @st.cache_resource
 def load_llm():
-    return pipeline("text2text-generation", model="google/flan-t5-small")
+    # ✅ Compatible with Streamlit (no KeyError)
+    return pipeline("text-generation", model="gpt2")
 
 classifier = load_food_model()
 llm = load_llm()
@@ -145,30 +146,22 @@ def text_to_audio(text):
     return file.name
 
 # -------------------------
-# FREE AI DIET AGENT
+# FREE AI DIET AGENT (SAFE)
 # -------------------------
 def diet_agent(age, weight, height, gender, goal, foods, bmi):
 
     prompt = f"""
-    Generate a simple healthy Western diet plan.
+    Create a simple healthy Western diet plan.
 
-    Age: {age}
-    Weight: {weight}
-    Height: {height}
-    Gender: {gender}
-    Goal: {goal}
-    BMI: {bmi}
+    Age: {age}, Weight: {weight}, Height: {height}
+    Gender: {gender}, Goal: {goal}, BMI: {bmi}
     Foods eaten: {foods}
 
-    Format:
-    Breakfast:
-    Lunch:
-    Dinner:
-    Snacks:
-    Tips:
+    Include:
+    Breakfast, Lunch, Dinner, Snacks, Tips.
     """
 
-    result = llm(prompt, max_length=200, do_sample=False)
+    result = llm(prompt, max_new_tokens=120)
     return result[0]['generated_text']
 
 # -------------------------
@@ -188,27 +181,22 @@ if uploaded_files:
 
     total, details = calculate_total(all_foods)
 
-    # DETECTED FOODS
     st.subheader("🍔 Detected Food Items")
     for f in all_foods:
         st.success(f)
 
-    # PER FOOD
     st.subheader("📊 Per Food Nutrients")
     for f, d in details:
         st.write(f"{f} → Carbs:{round(d['carbs'],1)}, Protein:{round(d['protein'],1)}, Fat:{round(d['fat'],1)}, Vitamins:{round(d['vitamins'],1)}")
 
-    # TOTAL
     st.subheader("📊 Total Nutrient Consumption")
     st.write(total)
 
-    # BMI
     bmi, status = calculate_bmi(weight, height)
 
     st.subheader("🤖 Health Analysis")
     st.write(f"BMI: {bmi} → {status}")
 
-    # AUDIO
     st.subheader("🔊 Smart Audio Advice")
     audio = text_to_audio(f"Your BMI is {bmi}")
     st.audio(audio)
@@ -219,7 +207,7 @@ if uploaded_files:
     # -------------------------
     # 🤖 FREE AI DIET PLANNER
     # -------------------------
-    st.subheader("🤖 Free AI Diet Planner (FLAN-T5)")
+    st.subheader("🤖 Free AI Diet Planner")
 
     if st.button("🥗 Generate Diet Plan"):
         with st.spinner("Generating diet plan..."):
