@@ -34,14 +34,15 @@ goal = st.sidebar.selectbox("Goal", ["Weight Loss", "Muscle Gain", "Maintain"])
 # -------------------------
 # GROQ AI (Free Cloud AI)
 # -------------------------
-def get_groq_response(user_question, context):
-    """Using Groq API - free and fast"""
+def get_ai_response(user_question, context):
+    """Using Groq API - free and fast, with smart fallback"""
     
-    GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+    # Get API key from secrets
+    GROQ_API_KEY = st.secrets.get("GROQ_API_KEY", "") if hasattr(st, 'secrets') else os.environ.get("GROQ_API_KEY", "")
     
+    # If no API key, use smart fallback
     if not GROQ_API_KEY:
-        # Fallback to rule-based response if no API key
-        return fallback_response(context, user_question)
+        return smart_fallback(context, user_question)
     
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
@@ -49,70 +50,102 @@ def get_groq_response(user_question, context):
         "Content-Type": "application/json"
     }
     
-    prompt = f"""You are a helpful health and nutrition AI assistant.
-User Profile:
+    prompt = f"""You are a friendly health and nutrition AI assistant. Give practical, personalized advice.
+
+USER PROFILE:
 - Age: {context['age']}
 - Weight: {context['weight']} kg
-- Height: {context['height']} cm
+- Height: {context['height']} cm  
 - Gender: {context['gender']}
 - Goal: {context['goal']}
 - BMI: {context['bmi']} ({context['bmi_status']})
 - Today's Foods: {', '.join(context['foods'])}
 
-Question: {user_question}
+QUESTION: {user_question}
 
-Provide a helpful, concise answer."""
+Respond in 2-3 sentences, be helpful and specific to their profile."""
 
     data = {
         "model": "llama3-8b-8192",
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.7,
-        "max_tokens": 500
+        "temperature": 0.8,
+        "max_tokens": 200
     }
     
     try:
         response = requests.post(url, headers=headers, json=data, timeout=30)
-        result = response.json()
-        return result["choices"][0]["message"]["content"]
+        if response.status_code == 200:
+            result = response.json()
+            return result["choices"][0]["message"]["content"]
+        else:
+            return smart_fallback(context, user_question)
     except:
-        return fallback_response(context, user_question)
+        return smart_fallback(context, user_question)
 
-def fallback_response(context, user_question):
-    """Fallback when no AI API available"""
+def smart_fallback(context, question):
+    """Smart fallback when no API available - gives different responses based on question"""
+    
     bmi = context['bmi']
     status = context['bmi_status']
-    foods = ', '.join(context['foods'])
     goal = context['goal']
+    foods = context['foods']
+    foods_str = ', '.join(foods).lower()
+    weight = context['weight']
     
-    responses = []
+    q = question.lower()
     
-    if "weight" in user_question.lower() or "lose" in user_question.lower():
+    # Weight loss questions
+    if any(word in q for word in ['weight', 'lose', 'loss', 'slim', 'diet']):
         if bmi > 25:
-            responses.append("Since your BMI is in the overweight range, focus on calorie deficit. Eat more vegetables, lean proteins, and avoid fried foods.")
+            return f"For weight loss with your BMI of {bmi}, create a 300-500 calorie deficit. Avoid {foods_str} and add more vegetables, lean protein, and water. Walking 30 mins daily helps!"
+        elif bmi < 18.5:
+            return f"Your BMI is {bmi}, which is underweight. Focus on nutrient-dense foods like nuts, avocados, and protein. Don't restrict calories - eat more than you burn!"
         else:
-            responses.append("Your weight is healthy. Maintain a balanced diet with regular exercise.")
+            return f"Your BMI of {bmi} is healthy! For maintenance, balance calories with activity. Eat whole foods and limit processed items."
     
-    if "food" in user_question.lower() or "eat" in user_question.lower():
-        if "burger" in foods.lower() or "fries" in foods.lower() or "pizza" in foods.lower():
-            responses.append("Your diet includes some unhealthy foods. Try to include more vegetables, fruits, and home-cooked meals.")
+    # Protein questions
+    if any(word in q for word in ['protein', 'muscle', 'gym', 'workout']):
+        if goal == "Muscle Gain":
+            return f"For muscle gain at {weight}kg, eat 1.6-2g protein per kg body weight. Good sources: eggs, chicken, dal, paneer. Combine with strength training!"
         else:
-            responses.append("Your food choices look reasonable. Keep up the good work!")
+            return f"Protein is essential! Aim for {int(weight * 0.8)}g daily. Best sources: eggs, chicken, fish, dal, paneer, and legumes."
     
-    if "protein" in user_question.lower():
-        responses.append("Good protein sources include eggs, chicken, dal, paneer, and legumes. Aim for your body weight in grams of protein daily.")
+    # Food questions
+    if any(word in q for word in ['food', 'eat', 'meal', 'healthy', 'unhealthy']):
+        junk = [f for f in foods if any(x in f.lower() for x in ['burger', 'fries', 'pizza', 'donut', 'hotdog'])]
+        if junk:
+            return f"Foods like {', '.join(junk)} are high in unhealthy fats and calories. Replace with home-cooked meals, more vegetables, fruits, and lean proteins!"
+        else:
+            return f"Your food choices are reasonable! Keep eating balanced meals with proteins, complex carbs, and plenty of vegetables."
     
-    if "goal" in user_question.lower():
+    # Exercise questions
+    if any(word in q for word in ['exercise', 'workout', 'gym', 'run', 'walk', 'sport']):
         if goal == "Weight Loss":
-            responses.append("For weight loss, create a calorie deficit of 300-500 calories daily. Eat protein-rich foods and exercise regularly.")
+            return "For weight loss, combine cardio (walking, running, cycling) with strength training. Start with 30 mins daily and gradually increase!"
         elif goal == "Muscle Gain":
-            responses.append("For muscle gain, eat protein-rich foods and do strength training. Surplus 200-300 calories daily.")
+            return "For muscle gain, focus on strength training - weight lifting, pushups, squats. Aim for 4-5 sessions weekly with protein-rich diet!"
         else:
-            responses.append("To maintain weight, balance your calorie intake with activity level.")
+            return "Regular exercise is great! Mix cardio and strength training. 150 mins weekly of moderate activity is recommended for maintaining health."
     
-    if not responses:
-        responses.append(f"Your BMI is {bmi} ({status}). Eat balanced meals with proteins, carbs, and vegetables. Stay active!")
+    # Calories questions
+    if any(word in q for word in ['calorie', 'calories', 'energy']):
+        return f"Your daily calorie needs depend on activity. At {weight}kg with your goal of {goal}, focus on whole foods rather than counting - quality matters!"
     
-    return " ".join(responses)
+    # General health
+    if any(word in q for word in ['health', 'good', 'better', 'improve']):
+        return f"Your BMI is {bmi} ({status}). To improve health: eat balanced meals, stay active, sleep 7-8 hours, and drink plenty of water daily!"
+    
+    # Goal specific
+    if any(word in q for word in ['goal', 'target', 'achieve']):
+        if goal == "Weight Loss":
+            return f"Your goal is {goal}. Create calorie deficit, eat protein-rich foods, avoid sugar, and exercise regularly. You got this! 💪"
+        elif goal == "Muscle Gain":
+            return f"Your goal is {goal}. Eat protein-rich diet, do strength training, rest properly. Progressive overload is key!"
+        else:
+            return f"Your goal is {goal}. Maintain balanced diet, stay active, and monitor your weight weekly. Consistency is key!"
+    
+    # Default - personalized based on their profile
+    return f"Based on your profile (BMI: {bmi}, {status}, Goal: {goal}): Focus on whole foods, stay active, and maintain consistency. Small steps lead to big changes!"
 
 # -------------------------
 # LOAD FOOD CLASSIFIER
@@ -130,7 +163,7 @@ except:
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"**📷 Classifier:** {classifier_status}")
-st.sidebar.markdown("**🤖 AI:** Groq (Cloud)")
+st.sidebar.markdown("**🤖 AI:** Groq + Smart Fallback")
 
 # -------------------------
 # BMI CALCULATION
@@ -322,7 +355,7 @@ if uploaded_files and classifier is not None:
         if user_q:
             st.session_state.chat_history.append({"role": "user", "content": user_q})
             with st.spinner("🤔 AI is thinking..."):
-                ai_response = get_groq_response(user_q, ai_context)
+                ai_response = get_ai_response(user_q, ai_context)
             st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
             st.rerun()
 
@@ -354,10 +387,15 @@ else:
     1. Fill in your profile in the sidebar
     2. Upload food images above
     3. Chat with AI about your diet!
+    
+    **Try asking:**
+    - "How can I lose weight?"
+    - "How much protein do I need?"
+    - "What exercises should I do?"
     """)
     
     col1, col2 = st.columns(2)
     with col1:
         st.success("📷 Food Classifier: Ready" if classifier else "❌ Not Loaded")
     with col2:
-        st.info("🤖 AI: Cloud Ready")
+        st.info("🤖 AI: Smart Responses")
