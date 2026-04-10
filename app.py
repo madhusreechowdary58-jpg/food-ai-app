@@ -60,27 +60,7 @@ def calculate_bmi(weight, height):
         return round(bmi, 2), "Obese"
 
 # -------------------------
-# BMR
-# -------------------------
-def calculate_bmr(weight, height, age, gender):
-    if gender == "Male":
-        return 10*weight + 6.25*height - 5*age + 5
-    else:
-        return 10*weight + 6.25*height - 5*age - 161
-
-# -------------------------
-# RDA
-# -------------------------
-def get_rda(age, weight, height, gender):
-    bmr = calculate_bmr(weight, height, age, gender)
-    calories = round(bmr * 1.4)
-    protein = round(0.8 * weight, 1)
-    carbs = round((0.5 * calories) / 4, 1)
-    fat = round((0.25 * calories) / 9, 1)
-    return {"calories": calories, "protein": protein, "carbs": carbs, "fat": fat}
-
-# -------------------------
-# CLEAN FOOD
+# USDA NUTRITION
 # -------------------------
 def clean_food(food):
     mapping = {
@@ -90,16 +70,13 @@ def clean_food(food):
     }
     return mapping.get(food.lower(), food)
 
-# -------------------------
-# USDA NUTRITION
-# -------------------------
 def get_nutrition(food):
     try:
         food = clean_food(food)
         url = f"https://api.nal.usda.gov/fdc/v1/foods/search?query={food}&api_key={USDA_API_KEY}"
         res = requests.get(url).json()
 
-        nutrients = {"calories": 0, "protein": 0, "fat": 0, "carbs": 0, "vitamins": 0}
+        nutrients = {"calories": 0, "protein": 0, "fat": 0, "carbs": 0}
         foods = res.get("foods", [])
 
         if not foods:
@@ -115,18 +92,16 @@ def get_nutrition(food):
                 nutrients["fat"] = item["value"]
             elif "carbohydrate" in name:
                 nutrients["carbs"] = item["value"]
-            elif "vitamin" in name:
-                nutrients["vitamins"] += item["value"]
 
         return nutrients
     except:
-        return {"calories": 0, "protein": 0, "fat": 0, "carbs": 0, "vitamins": 0}
+        return {"calories": 0, "protein": 0, "fat": 0, "carbs": 0}
 
 # -------------------------
 # TOTAL
 # -------------------------
 def calculate_total(foods):
-    total = {"calories": 0, "protein": 0, "fat": 0, "carbs": 0, "vitamins": 0}
+    total = {"calories": 0, "protein": 0, "fat": 0, "carbs": 0}
     details = []
     for food in foods:
         data = get_nutrition(food)
@@ -145,29 +120,22 @@ def text_to_audio(text):
     return file.name
 
 # -------------------------
-# FREE AI DIET AGENT (FIXED)
+# AI DIET AGENT (FINAL FIX)
 # -------------------------
 def diet_agent(age, weight, height, gender, goal, foods, bmi):
 
     prompt = f"""
-    Generate a healthy Western diet plan.
+    Create a simple Western diet plan.
 
-    Age: {age}
-    Weight: {weight}
-    Height: {height}
-    Gender: {gender}
-    Goal: {goal}
-    BMI: {bmi}
-    Foods eaten: {foods}
+    Age: {age}, Weight: {weight}, Height: {height}
+    Goal: {goal}, BMI: {bmi}
 
-    Format strictly:
-    Breakfast: 
-    Lunch: 
-    Dinner: 
-    Snacks: 
+    Give:
+    Breakfast:
+    Lunch:
+    Dinner:
+    Snacks:
     Tips:
-
-    Do not repeat.
     """
 
     result = llm(
@@ -180,7 +148,10 @@ def diet_agent(age, weight, height, gender, goal, foods, bmi):
 
     text = result[0]['generated_text']
 
-    # Clean repeated lines
+    # ❌ Remove prompt echo
+    text = text.replace(prompt, "")
+
+    # ✅ Clean lines
     lines = text.split("\n")
     clean = []
     for l in lines:
@@ -210,19 +181,16 @@ if uploaded_files:
     for f in all_foods:
         st.success(f)
 
-    st.subheader("📊 Per Food Nutrients")
+    st.subheader("📊 Nutrients")
     for f, d in details:
         st.write(f"{f} → Carbs:{round(d['carbs'],1)}, Protein:{round(d['protein'],1)}, Fat:{round(d['fat'],1)}")
-
-    st.subheader("📊 Total Nutrient Consumption")
-    st.write(total)
 
     bmi, status = calculate_bmi(weight, height)
 
     st.subheader("🤖 Health Analysis")
     st.write(f"BMI: {bmi} → {status}")
 
-    st.subheader("🔊 Smart Audio Advice")
+    st.subheader("🔊 Audio")
     audio = text_to_audio(f"Your BMI is {bmi}")
     st.audio(audio)
 
@@ -235,6 +203,6 @@ if uploaded_files:
     st.subheader("🤖 Free AI Diet Planner")
 
     if st.button("🥗 Generate Diet Plan"):
-        with st.spinner("Generating diet plan..."):
+        with st.spinner("Generating..."):
             plan = diet_agent(age, weight, height, gender, goal, all_foods, bmi)
             st.text(plan)
