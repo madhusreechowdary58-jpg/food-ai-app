@@ -34,7 +34,7 @@ def load_food_model():
 
 @st.cache_resource
 def load_llm():
-    return pipeline("text2text-generation", model="google/flan-t5-base")
+    return pipeline("text2text-generation", model="google/flan-t5-small")
 
 classifier = load_food_model()
 llm = load_llm()
@@ -145,12 +145,12 @@ def text_to_audio(text):
     return file.name
 
 # -------------------------
-# FREE AI DIET AGENT (FLAN-T5)
+# FREE AI DIET AGENT
 # -------------------------
 def diet_agent(age, weight, height, gender, goal, foods, bmi):
 
     prompt = f"""
-    Create a healthy Western diet plan.
+    Generate a simple healthy Western diet plan.
 
     Age: {age}
     Weight: {weight}
@@ -160,11 +160,15 @@ def diet_agent(age, weight, height, gender, goal, foods, bmi):
     BMI: {bmi}
     Foods eaten: {foods}
 
-    Give:
-    Breakfast, Lunch, Dinner, Snacks and improvements.
+    Format:
+    Breakfast:
+    Lunch:
+    Dinner:
+    Snacks:
+    Tips:
     """
 
-    result = llm(prompt, max_length=200)
+    result = llm(prompt, max_length=200, do_sample=False)
     return result[0]['generated_text']
 
 # -------------------------
