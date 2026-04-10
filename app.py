@@ -6,7 +6,6 @@ import tempfile
 import os
 import requests
 import matplotlib.pyplot as plt
-from openai import OpenAI
 
 # -------------------------
 # PAGE CONFIG
@@ -14,11 +13,6 @@ from openai import OpenAI
 st.set_page_config(page_title="AI Food Health Analyzer", layout="wide")
 st.title("🍔 GenAI Food & Health Analyzer")
 st.markdown("---")
-
-# -------------------------
-# OPENAI CLIENT
-# -------------------------
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # -------------------------
 # USER INPUT
@@ -32,13 +26,18 @@ gender = st.sidebar.selectbox("Gender", ["Male", "Female"])
 goal = st.sidebar.selectbox("Goal", ["Weight Loss", "Muscle Gain", "Maintain"])
 
 # -------------------------
-# LOAD MODEL
+# LOAD MODELS
 # -------------------------
 @st.cache_resource
-def load_model():
+def load_food_model():
     return pipeline("image-classification", model="nateraw/food")
 
-classifier = load_model()
+@st.cache_resource
+def load_llm():
+    return pipeline("text2text-generation", model="google/flan-t5-base")
+
+classifier = load_food_model()
+llm = load_llm()
 
 # -------------------------
 # API KEY
@@ -146,32 +145,27 @@ def text_to_audio(text):
     return file.name
 
 # -------------------------
-# AI DIET AGENT (WESTERN)
+# FREE AI DIET AGENT (FLAN-T5)
 # -------------------------
 def diet_agent(age, weight, height, gender, goal, foods, bmi):
 
-    system_prompt = "You are a Western nutrition expert."
+    prompt = f"""
+    Create a healthy Western diet plan.
 
-    user_prompt = f"""
-    Age: {age}, Weight: {weight}, Height: {height}
-    Gender: {gender}, Goal: {goal}, BMI: {bmi}
-    Foods: {foods}
+    Age: {age}
+    Weight: {weight}
+    Height: {height}
+    Gender: {gender}
+    Goal: {goal}
+    BMI: {bmi}
+    Foods eaten: {foods}
 
-    Generate:
-    - Diet analysis
-    - Full-day Western diet plan
-    - Improvements
+    Give:
+    Breakfast, Lunch, Dinner, Snacks and improvements.
     """
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-    )
-
-    return response.choices[0].message.content
+    result = llm(prompt, max_length=200)
+    return result[0]['generated_text']
 
 # -------------------------
 # MAIN
@@ -200,6 +194,10 @@ if uploaded_files:
     for f, d in details:
         st.write(f"{f} → Carbs:{round(d['carbs'],1)}, Protein:{round(d['protein'],1)}, Fat:{round(d['fat'],1)}, Vitamins:{round(d['vitamins'],1)}")
 
+    # TOTAL
+    st.subheader("📊 Total Nutrient Consumption")
+    st.write(total)
+
     # BMI
     bmi, status = calculate_bmi(weight, height)
 
@@ -215,36 +213,11 @@ if uploaded_files:
         os.remove(audio)
 
     # -------------------------
-    # ✅ AI DIET PLANNER
+    # 🤖 FREE AI DIET PLANNER
     # -------------------------
-    st.subheader("🤖 AI Diet Planner")
+    st.subheader("🤖 Free AI Diet Planner (FLAN-T5)")
 
     if st.button("🥗 Generate Diet Plan"):
-
         with st.spinner("Generating diet plan..."):
-            try:
-                plan = diet_agent(age, weight, height, gender, goal, all_foods, bmi)
-                st.write(plan)
-
-            except Exception as e:
-                st.warning("⚠️ API limit reached. Showing basic plan.")
-
-                st.write("""
-### 🥗 Basic Western Diet Plan
-
-Breakfast:
-- Oatmeal + milk + fruits
-- Boiled eggs
-
-Lunch:
-- Grilled chicken + brown rice + vegetables
-
-Snacks:
-- Apple + almonds
-
-Dinner:
-- Whole wheat bread + salad + soup
-
-Tip:
-Avoid fried and processed foods. Drink more water.
-""")
+            plan = diet_agent(age, weight, height, gender, goal, all_foods, bmi)
+            st.write(plan)
