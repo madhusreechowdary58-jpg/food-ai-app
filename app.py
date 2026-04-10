@@ -26,23 +26,19 @@ gender = st.sidebar.selectbox("Gender", ["Male", "Female"])
 goal = st.sidebar.selectbox("Goal", ["Weight Loss", "Muscle Gain", "Maintain"])
 
 # -------------------------
-# LOAD MODELS
+# LOAD FOOD MODEL
 # -------------------------
 @st.cache_resource
 def load_food_model():
     return pipeline("image-classification", model="nateraw/food")
 
-@st.cache_resource
-def load_llm():
-    return pipeline("text-generation", model="gpt2")
-
 classifier = load_food_model()
-llm = load_llm()
 
 # -------------------------
-# USDA API
+# API KEYS
 # -------------------------
 USDA_API_KEY = st.secrets["USDA_API_KEY"]
+HF_API_KEY = st.secrets["HUGGINGFACE_API_KEY"]
 
 # -------------------------
 # BMI
@@ -60,7 +56,7 @@ def calculate_bmi(weight, height):
         return round(bmi, 2), "Obese"
 
 # -------------------------
-# USDA NUTRITION
+# CLEAN FOOD
 # -------------------------
 def clean_food(food):
     mapping = {
@@ -70,6 +66,9 @@ def clean_food(food):
     }
     return mapping.get(food.lower(), food)
 
+# -------------------------
+# USDA NUTRITION
+# -------------------------
 def get_nutrition(food):
     try:
         food = clean_food(food)
@@ -120,45 +119,43 @@ def text_to_audio(text):
     return file.name
 
 # -------------------------
-# AI DIET AGENT (FINAL FIX)
+# 🤖 HUGGING FACE AI AGENT
 # -------------------------
 def diet_agent(age, weight, height, gender, goal, foods, bmi):
 
+    API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-base"
+    headers = {"Authorization": f"Bearer {HF_API_KEY}"}
+
     prompt = f"""
-    Create a simple Western diet plan.
+    Create a clean Western diet plan.
 
-    Age: {age}, Weight: {weight}, Height: {height}
-    Goal: {goal}, BMI: {bmi}
+    Age: {age}
+    Weight: {weight}
+    Height: {height}
+    Gender: {gender}
+    Goal: {goal}
+    BMI: {bmi}
+    Foods eaten: {foods}
 
-    Give:
+    Format:
     Breakfast:
     Lunch:
     Dinner:
     Snacks:
     Tips:
+
+    Give short answer.
     """
 
-    result = llm(
-        prompt,
-        max_new_tokens=120,
-        do_sample=True,
-        temperature=0.7,
-        repetition_penalty=1.2
-    )
+    response = requests.post(API_URL, headers=headers, json={"inputs": prompt})
+    result = response.json()
 
-    text = result[0]['generated_text']
+    try:
+        text = result[0]["generated_text"]
+    except:
+        text = "⚠️ Unable to generate diet plan. Try again."
 
-    # ❌ Remove prompt echo
-    text = text.replace(prompt, "")
-
-    # ✅ Clean lines
-    lines = text.split("\n")
-    clean = []
-    for l in lines:
-        if l.strip() and l not in clean:
-            clean.append(l)
-
-    return "\n".join(clean[:6])
+    return text
 
 # -------------------------
 # MAIN
@@ -177,20 +174,24 @@ if uploaded_files:
 
     total, details = calculate_total(all_foods)
 
+    # FOOD LIST
     st.subheader("🍔 Detected Food Items")
     for f in all_foods:
         st.success(f)
 
+    # NUTRIENTS
     st.subheader("📊 Nutrients")
     for f, d in details:
         st.write(f"{f} → Carbs:{round(d['carbs'],1)}, Protein:{round(d['protein'],1)}, Fat:{round(d['fat'],1)}")
 
+    # BMI
     bmi, status = calculate_bmi(weight, height)
 
     st.subheader("🤖 Health Analysis")
     st.write(f"BMI: {bmi} → {status}")
 
-    st.subheader("🔊 Audio")
+    # AUDIO
+    st.subheader("🔊 Audio Advice")
     audio = text_to_audio(f"Your BMI is {bmi}")
     st.audio(audio)
 
@@ -198,11 +199,11 @@ if uploaded_files:
         os.remove(audio)
 
     # -------------------------
-    # AI DIET PLANNER
+    # 🤖 AI DIET PLANNER
     # -------------------------
-    st.subheader("🤖 Free AI Diet Planner")
+    st.subheader("🤖 AI Diet Planner (Hugging Face)")
 
     if st.button("🥗 Generate Diet Plan"):
-        with st.spinner("Generating..."):
+        with st.spinner("Generating diet plan..."):
             plan = diet_agent(age, weight, height, gender, goal, all_foods, bmi)
             st.text(plan)
