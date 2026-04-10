@@ -5,7 +5,7 @@ from gtts import gTTS
 import tempfile
 import os
 import matplotlib.pyplot as plt
-from langchain_community.llms import Ollama
+import requests
 import threading
 import time
 
@@ -32,21 +32,87 @@ gender = st.sidebar.selectbox("Gender", ["Male", "Female"])
 goal = st.sidebar.selectbox("Goal", ["Weight Loss", "Muscle Gain", "Maintain"])
 
 # -------------------------
-# INITIALIZE OLLAMA
+# GROQ AI (Free Cloud AI)
 # -------------------------
-@st.cache_resource
-def load_ollama():
-    return Ollama(model="mistral", temperature=0.7)
+def get_groq_response(user_question, context):
+    """Using Groq API - free and fast"""
+    
+    GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+    
+    if not GROQ_API_KEY:
+        # Fallback to rule-based response if no API key
+        return fallback_response(context, user_question)
+    
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    prompt = f"""You are a helpful health and nutrition AI assistant.
+User Profile:
+- Age: {context['age']}
+- Weight: {context['weight']} kg
+- Height: {context['height']} cm
+- Gender: {context['gender']}
+- Goal: {context['goal']}
+- BMI: {context['bmi']} ({context['bmi_status']})
+- Today's Foods: {', '.join(context['foods'])}
 
-try:
-    llm = load_ollama()
-    ollama_status = "✅ Ollama Connected"
-except Exception as e:
-    llm = None
-    ollama_status = f"❌ Ollama Error"
+Question: {user_question}
 
-st.sidebar.markdown("---")
-st.sidebar.markdown(f"**🤖 AI Status:** {ollama_status}")
+Provide a helpful, concise answer."""
+
+    data = {
+        "model": "llama3-8b-8192",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.7,
+        "max_tokens": 500
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=data, timeout=30)
+        result = response.json()
+        return result["choices"][0]["message"]["content"]
+    except:
+        return fallback_response(context, user_question)
+
+def fallback_response(context, user_question):
+    """Fallback when no AI API available"""
+    bmi = context['bmi']
+    status = context['bmi_status']
+    foods = ', '.join(context['foods'])
+    goal = context['goal']
+    
+    responses = []
+    
+    if "weight" in user_question.lower() or "lose" in user_question.lower():
+        if bmi > 25:
+            responses.append("Since your BMI is in the overweight range, focus on calorie deficit. Eat more vegetables, lean proteins, and avoid fried foods.")
+        else:
+            responses.append("Your weight is healthy. Maintain a balanced diet with regular exercise.")
+    
+    if "food" in user_question.lower() or "eat" in user_question.lower():
+        if "burger" in foods.lower() or "fries" in foods.lower() or "pizza" in foods.lower():
+            responses.append("Your diet includes some unhealthy foods. Try to include more vegetables, fruits, and home-cooked meals.")
+        else:
+            responses.append("Your food choices look reasonable. Keep up the good work!")
+    
+    if "protein" in user_question.lower():
+        responses.append("Good protein sources include eggs, chicken, dal, paneer, and legumes. Aim for your body weight in grams of protein daily.")
+    
+    if "goal" in user_question.lower():
+        if goal == "Weight Loss":
+            responses.append("For weight loss, create a calorie deficit of 300-500 calories daily. Eat protein-rich foods and exercise regularly.")
+        elif goal == "Muscle Gain":
+            responses.append("For muscle gain, eat protein-rich foods and do strength training. Surplus 200-300 calories daily.")
+        else:
+            responses.append("To maintain weight, balance your calorie intake with activity level.")
+    
+    if not responses:
+        responses.append(f"Your BMI is {bmi} ({status}). Eat balanced meals with proteins, carbs, and vegetables. Stay active!")
+    
+    return " ".join(responses)
 
 # -------------------------
 # LOAD FOOD CLASSIFIER
@@ -62,7 +128,9 @@ except:
     classifier = None
     classifier_status = "❌ Not Loaded"
 
+st.sidebar.markdown("---")
 st.sidebar.markdown(f"**📷 Classifier:** {classifier_status}")
+st.sidebar.markdown("**🤖 AI:** Groq (Cloud)")
 
 # -------------------------
 # BMI CALCULATION
@@ -136,30 +204,6 @@ def calculate_total(foods):
         for k in total:
             total[k] += data[k]
     return total, details
-
-# -------------------------
-# AI HEALTH AGENT
-# -------------------------
-def ai_health_agent(user_question, context):
-    prompt = f"""You are a helpful health and nutrition AI assistant.
-User Profile:
-- Age: {context['age']}
-- Weight: {context['weight']} kg
-- Height: {context['height']} cm
-- Gender: {context['gender']}
-- Goal: {context['goal']}
-- BMI: {context['bmi']} ({context['bmi_status']})
-- Foods: {', '.join(context['foods'])}
-
-Question: {user_question}
-
-Provide a helpful, concise answer."""
-    try:
-        if llm is None:
-            return "❌ Ollama not connected"
-        return llm.invoke(prompt)
-    except Exception as e:
-        return f"Error: {str(e)}"
 
 # -------------------------
 # TEXT TO AUDIO
@@ -278,7 +322,7 @@ if uploaded_files and classifier is not None:
         if user_q:
             st.session_state.chat_history.append({"role": "user", "content": user_q})
             with st.spinner("🤔 AI is thinking..."):
-                ai_response = ai_health_agent(user_q, ai_context)
+                ai_response = get_groq_response(user_q, ai_context)
             st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
             st.rerun()
 
@@ -310,13 +354,10 @@ else:
     1. Fill in your profile in the sidebar
     2. Upload food images above
     3. Chat with AI about your diet!
-    
-    **Requirements:**
-    - Ollama must be running in background
     """)
     
     col1, col2 = st.columns(2)
     with col1:
         st.success("📷 Food Classifier: Ready" if classifier else "❌ Not Loaded")
     with col2:
-        st.success("🤖 AI Agent: Ready" if llm else "⚠️ Check Ollama")
+        st.info("🤖 AI: Cloud Ready")
