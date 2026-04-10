@@ -34,14 +34,13 @@ def load_food_model():
 
 @st.cache_resource
 def load_llm():
-    # ✅ Compatible with Streamlit (no KeyError)
     return pipeline("text-generation", model="gpt2")
 
 classifier = load_food_model()
 llm = load_llm()
 
 # -------------------------
-# API KEY
+# USDA API
 # -------------------------
 USDA_API_KEY = st.secrets["USDA_API_KEY"]
 
@@ -146,23 +145,49 @@ def text_to_audio(text):
     return file.name
 
 # -------------------------
-# FREE AI DIET AGENT (SAFE)
+# FREE AI DIET AGENT (FIXED)
 # -------------------------
 def diet_agent(age, weight, height, gender, goal, foods, bmi):
 
     prompt = f"""
-    Create a simple healthy Western diet plan.
+    Generate a healthy Western diet plan.
 
-    Age: {age}, Weight: {weight}, Height: {height}
-    Gender: {gender}, Goal: {goal}, BMI: {bmi}
+    Age: {age}
+    Weight: {weight}
+    Height: {height}
+    Gender: {gender}
+    Goal: {goal}
+    BMI: {bmi}
     Foods eaten: {foods}
 
-    Include:
-    Breakfast, Lunch, Dinner, Snacks, Tips.
+    Format strictly:
+    Breakfast: 
+    Lunch: 
+    Dinner: 
+    Snacks: 
+    Tips:
+
+    Do not repeat.
     """
 
-    result = llm(prompt, max_new_tokens=120)
-    return result[0]['generated_text']
+    result = llm(
+        prompt,
+        max_new_tokens=120,
+        do_sample=True,
+        temperature=0.7,
+        repetition_penalty=1.2
+    )
+
+    text = result[0]['generated_text']
+
+    # Clean repeated lines
+    lines = text.split("\n")
+    clean = []
+    for l in lines:
+        if l.strip() and l not in clean:
+            clean.append(l)
+
+    return "\n".join(clean[:6])
 
 # -------------------------
 # MAIN
@@ -187,7 +212,7 @@ if uploaded_files:
 
     st.subheader("📊 Per Food Nutrients")
     for f, d in details:
-        st.write(f"{f} → Carbs:{round(d['carbs'],1)}, Protein:{round(d['protein'],1)}, Fat:{round(d['fat'],1)}, Vitamins:{round(d['vitamins'],1)}")
+        st.write(f"{f} → Carbs:{round(d['carbs'],1)}, Protein:{round(d['protein'],1)}, Fat:{round(d['fat'],1)}")
 
     st.subheader("📊 Total Nutrient Consumption")
     st.write(total)
@@ -205,11 +230,11 @@ if uploaded_files:
         os.remove(audio)
 
     # -------------------------
-    # 🤖 FREE AI DIET PLANNER
+    # AI DIET PLANNER
     # -------------------------
     st.subheader("🤖 Free AI Diet Planner")
 
     if st.button("🥗 Generate Diet Plan"):
         with st.spinner("Generating diet plan..."):
             plan = diet_agent(age, weight, height, gender, goal, all_foods, bmi)
-            st.write(plan)
+            st.text(plan)
