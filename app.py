@@ -99,22 +99,31 @@ def estimate_nutrition(food):
     return {"calories": 100, "protein": 5, "fat": 3, "carbs": 15}
 
 # -------------------------
+# CALCULATE TOTAL (THIS WAS MISSING!)
+# -------------------------
+def calculate_total(foods):
+    total = {"calories": 0, "protein": 0, "fat": 0, "carbs": 0}
+    details = []
+    for food in foods:
+        data = estimate_nutrition(food)
+        details.append((food, data))
+        for k in total:
+            total[k] += data[k]
+    return total, details
+
+# -------------------------
 # SMART AI RESPONSE
 # -------------------------
 def get_ai_response(question, context):
-    """Generate personalized AI response based on question"""
-    
     bmi = context['bmi']
     status = context['bmi_status']
     goal = context['goal']
     weight = context['weight']
-    age = context['age']
     foods = context['foods']
     foods_str = ', '.join(foods).lower()
     
     q = question.lower()
     
-    # Weight loss
     if any(w in q for w in ['lose', 'loss', 'weight', 'slim', 'fat']):
         if bmi > 25:
             return f"🔥 For weight loss with BMI {bmi}: Create 300-500 cal deficit. Skip {foods_str}. Eat protein-rich foods, vegetables, and drink 3L water daily. Walk 10,000 steps!"
@@ -123,12 +132,10 @@ def get_ai_response(question, context):
         else:
             return f"✅ Your BMI {bmi} is normal. For maintenance: balanced meals, exercise 3x/week, avoid processed foods. You're doing great!"
     
-    # Protein / muscle
     if any(w in q for w in ['protein', 'muscle', 'gym', 'workout', 'strength']):
         protein_needed = int(weight * 1.6)
         return f"💪 For {goal}: Eat {protein_needed}g protein daily! Sources: 4 eggs, 200g chicken, 100g paneer, 1 cup dal. Workout: strength training 4x/week. Sleep 8 hours!"
     
-    # Food questions
     if any(w in q for w in ['eat', 'food', 'meal', 'healthy', 'unhealthy', 'good']):
         junk = [f for f in foods if any(x in f.lower() for x in ['burger', 'fries', 'pizza', 'donut', 'hotdog'])]
         if junk:
@@ -136,7 +143,6 @@ def get_ai_response(question, context):
         else:
             return f"🥗 Your food choices look good! Keep eating whole foods: proteins, complex carbs, and plenty of vegetables. Variety is key for nutrients!"
     
-    # Exercise
     if any(w in q for w in ['exercise', 'run', 'walk', 'cardio', 'yoga']):
         if goal == "Weight Loss":
             return "🏃 For weight loss: Walk 30 mins daily + strength training 3x/week. Start slow, gradually increase intensity. Swimming and cycling are great too!"
@@ -145,15 +151,12 @@ def get_ai_response(question, context):
         else:
             return "🏃 For maintenance: Mix of cardio + strength. 150 mins moderate exercise weekly. Walking, swimming, cycling - pick what you enjoy!"
     
-    # Calories
     if any(w in q for w in ['calorie', 'energy']):
         return f"⚡ At {weight}kg with goal '{goal}': Focus on food QUALITY not just calories. Whole foods keep you full longer. Avoid empty calories from sugar and fried foods!"
     
-    # General health
     if any(w in q for w in ['health', 'better', 'improve', 'tip', 'advice']):
         return f"💡 Health tips for you: 1) Drink 3L water daily 2) Sleep 7-8 hours 3) Eat protein with every meal 4) Walk 10,000 steps 5) Limit sugar and processed foods!"
     
-    # Goal specific
     if any(w in q for w in ['goal', 'target']):
         if goal == "Weight Loss":
             return f"🎯 Your goal: Weight Loss. Action plan: Eat 300-500 cal less than burn, protein-rich diet, cardio + strength training. You CAN do it! 💪"
@@ -162,15 +165,13 @@ def get_ai_response(question, context):
         else:
             return f"🎯 Your goal: Maintain. Action plan: Balance intake with activity, eat whole foods, exercise regularly, monitor weekly. Consistency wins! 💪"
     
-    # Default - make it dynamic
+    # Default responses
     responses = [
-        f"Based on your profile: BMI {bmi} ({status}) and goal '{goal}'. Focus on whole foods, stay active, and be consistent! Small changes = big results!",
-        f"💡 Tip: With BMI {bmi}, prioritize {('protein-rich foods and cardio' if bmi > 25 else 'balanced nutrition and regular exercise')}. You've got this!",
-        f"🌟 Remember: Consistency over perfection! Even small steps daily lead to big changes over time. Start with one healthy habit today!"
+        f"Based on your profile: BMI {bmi} ({status}) and goal '{goal}'. Focus on whole foods, stay active, and be consistent!",
+        f"💡 With BMI {bmi}, prioritize {('protein-rich foods and cardio' if bmi > 25 else 'balanced nutrition and regular exercise')}. You've got this!",
+        f"🌟 Remember: Consistency over perfection! Even small steps daily lead to big changes over time."
     ]
     
-    import hashlib
-    # Different response based on question length
     return responses[len(q) % 3]
 
 # -------------------------
@@ -241,28 +242,18 @@ if uploaded_files:
         st.markdown("---")
         st.header("🤖 AI Health Assistant")
         
-        # Clear chat when new images uploaded
         if 'current_foods' not in st.session_state or st.session_state.current_foods != all_foods:
             st.session_state.messages = []
             st.session_state.current_foods = all_foods
         
-        # Show messages
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]):
                 st.write(msg["content"])
 
-        # Chat input
         if prompt := st.chat_input("💬 Ask me anything about your diet, health, or nutrition!"):
-            # Add user message
             st.session_state.messages.append({"role": "user", "content": prompt})
-            
-            # Generate AI response
             ai_reply = get_ai_response(prompt, ai_context)
-            
-            # Add AI response
             st.session_state.messages.append({"role": "assistant", "content": ai_reply})
-            
-            # Force refresh
             st.rerun()
 
 else:
