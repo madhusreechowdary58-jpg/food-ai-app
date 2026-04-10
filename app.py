@@ -154,9 +154,13 @@ def diet_agent(age, weight, height, gender, goal, foods, bmi):
 
     user_prompt = f"""
     User Details:
-    Age: {age}, Weight: {weight}, Height: {height}
-    Gender: {gender}, Goal: {goal}, BMI: {bmi}
-    Foods: {foods}
+    Age: {age}
+    Weight: {weight}
+    Height: {height}
+    Gender: {gender}
+    Goal: {goal}
+    BMI: {bmi}
+    Current Foods: {foods}
 
     Generate:
     - Diet analysis
@@ -199,27 +203,26 @@ if uploaded_files:
     for f, d in details:
         st.write(f"{f} → Carbs:{round(d['carbs'],1)}, Protein:{round(d['protein'],1)}, Fat:{round(d['fat'],1)}")
 
-    # -------------------------
-    # ANALYSIS
-    # -------------------------
-    st.subheader("🤖 Health Analysis")
+    # BMI
     bmi, status = calculate_bmi(weight, height)
+
+    st.subheader("🤖 Health Analysis")
     st.write(f"BMI: {bmi} → {status}")
 
-    # -------------------------
     # AUDIO
-    # -------------------------
     audio = text_to_audio(f"Your BMI is {bmi}")
     st.audio(audio)
 
     # -------------------------
-    # AI DIET PLANNER
+    # ✅ AI DIET PLANNER (VISIBLE FIX)
     # -------------------------
     st.subheader("🤖 AI Diet Planner (Agent)")
 
     if st.button("🥗 Generate Smart Diet Plan"):
-        try:
-            plan = diet_agent(age, weight, height, gender, goal, all_foods, bmi)
-            st.write(plan)
-        except:
-            st.error("Error generating diet plan")
+        with st.spinner("Generating your AI diet plan..."):
+            try:
+                plan = diet_agent(age, weight, height, gender, goal, all_foods, bmi)
+                st.write(plan)
+            except Exception as e:
+                st.error("Error generating diet plan")
+                st.write(e)
