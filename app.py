@@ -5,9 +5,6 @@ from gtts import gTTS
 import tempfile
 import os
 import matplotlib.pyplot as plt
-import requests
-import threading
-import time
 
 # -------------------------
 # PAGE CONFIG
@@ -24,128 +21,10 @@ st.sidebar.header("👤 User Profile")
 
 age = st.sidebar.number_input("Age", 5, 80, value=25)
 weight = st.sidebar.number_input("Weight (kg)", 20, 150, value=60)
-
 height_ft = st.sidebar.number_input("Height (feet)", 1.0, 7.0, value=5.5, step=0.1)
 height = round(height_ft * 30.48)
-
 gender = st.sidebar.selectbox("Gender", ["Male", "Female"])
 goal = st.sidebar.selectbox("Goal", ["Weight Loss", "Muscle Gain", "Maintain"])
-
-# -------------------------
-# GROQ AI (Free Cloud AI)
-# -------------------------
-def get_ai_response(user_question, context):
-    """Using Groq API - free and fast, with smart fallback"""
-    
-    # Get API key from secrets
-    GROQ_API_KEY = st.secrets.get("GROQ_API_KEY", "") if hasattr(st, 'secrets') else os.environ.get("GROQ_API_KEY", "")
-    
-    # If no API key, use smart fallback
-    if not GROQ_API_KEY:
-        return smart_fallback(context, user_question)
-    
-    url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    prompt = f"""You are a friendly health and nutrition AI assistant. Give practical, personalized advice.
-
-USER PROFILE:
-- Age: {context['age']}
-- Weight: {context['weight']} kg
-- Height: {context['height']} cm  
-- Gender: {context['gender']}
-- Goal: {context['goal']}
-- BMI: {context['bmi']} ({context['bmi_status']})
-- Today's Foods: {', '.join(context['foods'])}
-
-QUESTION: {user_question}
-
-Respond in 2-3 sentences, be helpful and specific to their profile."""
-
-    data = {
-        "model": "llama3-8b-8192",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.8,
-        "max_tokens": 200
-    }
-    
-    try:
-        response = requests.post(url, headers=headers, json=data, timeout=30)
-        if response.status_code == 200:
-            result = response.json()
-            return result["choices"][0]["message"]["content"]
-        else:
-            return smart_fallback(context, user_question)
-    except:
-        return smart_fallback(context, user_question)
-
-def smart_fallback(context, question):
-    """Smart fallback when no API available - gives different responses based on question"""
-    
-    bmi = context['bmi']
-    status = context['bmi_status']
-    goal = context['goal']
-    foods = context['foods']
-    foods_str = ', '.join(foods).lower()
-    weight = context['weight']
-    
-    q = question.lower()
-    
-    # Weight loss questions
-    if any(word in q for word in ['weight', 'lose', 'loss', 'slim', 'diet']):
-        if bmi > 25:
-            return f"For weight loss with your BMI of {bmi}, create a 300-500 calorie deficit. Avoid {foods_str} and add more vegetables, lean protein, and water. Walking 30 mins daily helps!"
-        elif bmi < 18.5:
-            return f"Your BMI is {bmi}, which is underweight. Focus on nutrient-dense foods like nuts, avocados, and protein. Don't restrict calories - eat more than you burn!"
-        else:
-            return f"Your BMI of {bmi} is healthy! For maintenance, balance calories with activity. Eat whole foods and limit processed items."
-    
-    # Protein questions
-    if any(word in q for word in ['protein', 'muscle', 'gym', 'workout']):
-        if goal == "Muscle Gain":
-            return f"For muscle gain at {weight}kg, eat 1.6-2g protein per kg body weight. Good sources: eggs, chicken, dal, paneer. Combine with strength training!"
-        else:
-            return f"Protein is essential! Aim for {int(weight * 0.8)}g daily. Best sources: eggs, chicken, fish, dal, paneer, and legumes."
-    
-    # Food questions
-    if any(word in q for word in ['food', 'eat', 'meal', 'healthy', 'unhealthy']):
-        junk = [f for f in foods if any(x in f.lower() for x in ['burger', 'fries', 'pizza', 'donut', 'hotdog'])]
-        if junk:
-            return f"Foods like {', '.join(junk)} are high in unhealthy fats and calories. Replace with home-cooked meals, more vegetables, fruits, and lean proteins!"
-        else:
-            return f"Your food choices are reasonable! Keep eating balanced meals with proteins, complex carbs, and plenty of vegetables."
-    
-    # Exercise questions
-    if any(word in q for word in ['exercise', 'workout', 'gym', 'run', 'walk', 'sport']):
-        if goal == "Weight Loss":
-            return "For weight loss, combine cardio (walking, running, cycling) with strength training. Start with 30 mins daily and gradually increase!"
-        elif goal == "Muscle Gain":
-            return "For muscle gain, focus on strength training - weight lifting, pushups, squats. Aim for 4-5 sessions weekly with protein-rich diet!"
-        else:
-            return "Regular exercise is great! Mix cardio and strength training. 150 mins weekly of moderate activity is recommended for maintaining health."
-    
-    # Calories questions
-    if any(word in q for word in ['calorie', 'calories', 'energy']):
-        return f"Your daily calorie needs depend on activity. At {weight}kg with your goal of {goal}, focus on whole foods rather than counting - quality matters!"
-    
-    # General health
-    if any(word in q for word in ['health', 'good', 'better', 'improve']):
-        return f"Your BMI is {bmi} ({status}). To improve health: eat balanced meals, stay active, sleep 7-8 hours, and drink plenty of water daily!"
-    
-    # Goal specific
-    if any(word in q for word in ['goal', 'target', 'achieve']):
-        if goal == "Weight Loss":
-            return f"Your goal is {goal}. Create calorie deficit, eat protein-rich foods, avoid sugar, and exercise regularly. You got this! 💪"
-        elif goal == "Muscle Gain":
-            return f"Your goal is {goal}. Eat protein-rich diet, do strength training, rest properly. Progressive overload is key!"
-        else:
-            return f"Your goal is {goal}. Maintain balanced diet, stay active, and monitor your weight weekly. Consistency is key!"
-    
-    # Default - personalized based on their profile
-    return f"Based on your profile (BMI: {bmi}, {status}, Goal: {goal}): Focus on whole foods, stay active, and maintain consistency. Small steps lead to big changes!"
 
 # -------------------------
 # LOAD FOOD CLASSIFIER
@@ -154,16 +33,10 @@ def smart_fallback(context, question):
 def load_model():
     return pipeline("image-classification", model="nateraw/food")
 
-try:
-    classifier = load_model()
-    classifier_status = "✅ Model Loaded"
-except:
-    classifier = None
-    classifier_status = "❌ Not Loaded"
+classifier = load_model()
 
 st.sidebar.markdown("---")
-st.sidebar.markdown(f"**📷 Classifier:** {classifier_status}")
-st.sidebar.markdown("**🤖 AI:** Groq + Smart Fallback")
+st.sidebar.success("📷 Classifier: Ready")
 
 # -------------------------
 # BMI CALCULATION
@@ -205,50 +78,100 @@ def get_rda(age, weight, height, gender):
 # -------------------------
 def estimate_nutrition(food):
     estimates = {
-        "burger": {"calories": 300, "protein": 15, "fat": 12, "carbs": 35, "vitamins": 10},
-        "fries": {"calories": 250, "protein": 3, "fat": 12, "carbs": 33, "vitamins": 5},
-        "pizza": {"calories": 270, "protein": 11, "fat": 10, "carbs": 36, "vitamins": 15},
-        "salad": {"calories": 50, "protein": 2, "fat": 0, "carbs": 10, "vitamins": 40},
-        "rice": {"calories": 130, "protein": 2, "fat": 0, "carbs": 28, "vitamins": 5},
-        "chicken": {"calories": 165, "protein": 31, "fat": 3.6, "carbs": 0, "vitamins": 5},
-        "apple": {"calories": 95, "protein": 0.5, "fat": 0.3, "carbs": 25, "vitamins": 20},
-        "banana": {"calories": 105, "protein": 1.3, "fat": 0.4, "carbs": 27, "vitamins": 15},
-        "egg": {"calories": 78, "protein": 6, "fat": 5, "carbs": 0.6, "vitamins": 10},
-        "milk": {"calories": 103, "protein": 8, "fat": 2.4, "carbs": 12, "vitamins": 30},
-        "dal": {"calories": 116, "protein": 9, "fat": 0.5, "carbs": 20, "vitamins": 15},
-        "paneer": {"calories": 265, "protein": 14, "fat": 22, "carbs": 3, "vitamins": 8},
-        "bread": {"calories": 80, "protein": 3, "fat": 1, "carbs": 15, "vitamins": 5},
+        "burger": {"calories": 300, "protein": 15, "fat": 12, "carbs": 35},
+        "fries": {"calories": 250, "protein": 3, "fat": 12, "carbs": 33},
+        "pizza": {"calories": 270, "protein": 11, "fat": 10, "carbs": 36},
+        "salad": {"calories": 50, "protein": 2, "fat": 0, "carbs": 10},
+        "rice": {"calories": 130, "protein": 2, "fat": 0, "carbs": 28},
+        "chicken": {"calories": 165, "protein": 31, "fat": 3.6, "carbs": 0},
+        "apple": {"calories": 95, "protein": 0.5, "fat": 0.3, "carbs": 25},
+        "banana": {"calories": 105, "protein": 1.3, "fat": 0.4, "carbs": 27},
+        "egg": {"calories": 78, "protein": 6, "fat": 5, "carbs": 0.6},
+        "milk": {"calories": 103, "protein": 8, "fat": 2.4, "carbs": 12},
+        "dal": {"calories": 116, "protein": 9, "fat": 0.5, "carbs": 20},
+        "paneer": {"calories": 265, "protein": 14, "fat": 22, "carbs": 3},
+        "bread": {"calories": 80, "protein": 3, "fat": 1, "carbs": 15},
     }
     food_lower = food.lower()
     for key, value in estimates.items():
         if key in food_lower:
             return value
-    return {"calories": 100, "protein": 5, "fat": 3, "carbs": 15, "vitamins": 10}
+    return {"calories": 100, "protein": 5, "fat": 3, "carbs": 15}
 
 # -------------------------
-# CALCULATE TOTAL
+# SMART AI RESPONSE
 # -------------------------
-def calculate_total(foods):
-    total = {"calories": 0, "protein": 0, "fat": 0, "carbs": 0, "vitamins": 0}
-    details = []
-    for food in foods:
-        data = estimate_nutrition(food)
-        details.append((food, data))
-        for k in total:
-            total[k] += data[k]
-    return total, details
-
-# -------------------------
-# TEXT TO AUDIO
-# -------------------------
-def text_to_audio(text):
-    try:
-        tts = gTTS(text)
-        file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
-        tts.save(file.name)
-        return file.name
-    except:
-        return None
+def get_ai_response(question, context):
+    """Generate personalized AI response based on question"""
+    
+    bmi = context['bmi']
+    status = context['bmi_status']
+    goal = context['goal']
+    weight = context['weight']
+    age = context['age']
+    foods = context['foods']
+    foods_str = ', '.join(foods).lower()
+    
+    q = question.lower()
+    
+    # Weight loss
+    if any(w in q for w in ['lose', 'loss', 'weight', 'slim', 'fat']):
+        if bmi > 25:
+            return f"🔥 For weight loss with BMI {bmi}: Create 300-500 cal deficit. Skip {foods_str}. Eat protein-rich foods, vegetables, and drink 3L water daily. Walk 10,000 steps!"
+        elif bmi < 18.5:
+            return f"⚠️ You're underweight (BMI {bmi}). Don't lose weight! Eat calorie-dense foods: nuts, peanut butter, bananas, full-fat milk. Lift weights to build muscle."
+        else:
+            return f"✅ Your BMI {bmi} is normal. For maintenance: balanced meals, exercise 3x/week, avoid processed foods. You're doing great!"
+    
+    # Protein / muscle
+    if any(w in q for w in ['protein', 'muscle', 'gym', 'workout', 'strength']):
+        protein_needed = int(weight * 1.6)
+        return f"💪 For {goal}: Eat {protein_needed}g protein daily! Sources: 4 eggs, 200g chicken, 100g paneer, 1 cup dal. Workout: strength training 4x/week. Sleep 8 hours!"
+    
+    # Food questions
+    if any(w in q for w in ['eat', 'food', 'meal', 'healthy', 'unhealthy', 'good']):
+        junk = [f for f in foods if any(x in f.lower() for x in ['burger', 'fries', 'pizza', 'donut', 'hotdog'])]
+        if junk:
+            return f"🍔 {', '.join(junk.title())} aren't ideal. They have lots of unhealthy fats and sugar. Replace with: grilled chicken, brown rice, vegetables, fruits, and home-cooked meals!"
+        else:
+            return f"🥗 Your food choices look good! Keep eating whole foods: proteins, complex carbs, and plenty of vegetables. Variety is key for nutrients!"
+    
+    # Exercise
+    if any(w in q for w in ['exercise', 'run', 'walk', 'cardio', 'yoga']):
+        if goal == "Weight Loss":
+            return "🏃 For weight loss: Walk 30 mins daily + strength training 3x/week. Start slow, gradually increase intensity. Swimming and cycling are great too!"
+        elif goal == "Muscle Gain":
+            return "🏋️ For muscle gain: Weight lifting 4-5x/week. Focus on compound movements: squats, deadlifts, bench press. Rest muscles 48 hours between workouts."
+        else:
+            return "🏃 For maintenance: Mix of cardio + strength. 150 mins moderate exercise weekly. Walking, swimming, cycling - pick what you enjoy!"
+    
+    # Calories
+    if any(w in q for w in ['calorie', 'energy']):
+        return f"⚡ At {weight}kg with goal '{goal}': Focus on food QUALITY not just calories. Whole foods keep you full longer. Avoid empty calories from sugar and fried foods!"
+    
+    # General health
+    if any(w in q for w in ['health', 'better', 'improve', 'tip', 'advice']):
+        return f"💡 Health tips for you: 1) Drink 3L water daily 2) Sleep 7-8 hours 3) Eat protein with every meal 4) Walk 10,000 steps 5) Limit sugar and processed foods!"
+    
+    # Goal specific
+    if any(w in q for w in ['goal', 'target']):
+        if goal == "Weight Loss":
+            return f"🎯 Your goal: Weight Loss. Action plan: Eat 300-500 cal less than burn, protein-rich diet, cardio + strength training. You CAN do it! 💪"
+        elif goal == "Muscle Gain":
+            return f"🎯 Your goal: Muscle Gain. Action plan: Eat 200-300 cal surplus, high protein (1.6g/kg), strength train hard. Progressive overload = gains! 💪"
+        else:
+            return f"🎯 Your goal: Maintain. Action plan: Balance intake with activity, eat whole foods, exercise regularly, monitor weekly. Consistency wins! 💪"
+    
+    # Default - make it dynamic
+    responses = [
+        f"Based on your profile: BMI {bmi} ({status}) and goal '{goal}'. Focus on whole foods, stay active, and be consistent! Small changes = big results!",
+        f"💡 Tip: With BMI {bmi}, prioritize {('protein-rich foods and cardio' if bmi > 25 else 'balanced nutrition and regular exercise')}. You've got this!",
+        f"🌟 Remember: Consistency over perfection! Even small steps daily lead to big changes over time. Start with one healthy habit today!"
+    ]
+    
+    import hashlib
+    # Different response based on question length
+    return responses[len(q) % 3]
 
 # -------------------------
 # MAIN APP
@@ -257,7 +180,7 @@ st.header("📸 Upload Your Food Images")
 
 uploaded_files = st.file_uploader("Choose food images...", accept_multiple_files=True, type=['png', 'jpg', 'jpeg'])
 
-if uploaded_files and classifier is not None:
+if uploaded_files:
     all_foods = []
     
     for file in uploaded_files:
@@ -266,7 +189,7 @@ if uploaded_files and classifier is not None:
         with col1:
             st.image(img, width=150)
         with col2:
-            with st.spinner(f"🔍 Analyzing {file.name}..."):
+            with st.spinner(f"🔍 Analyzing..."):
                 res = classifier(img)
                 food = res[0]["label"].replace("_", " ")
                 all_foods.append(food)
@@ -280,15 +203,14 @@ if uploaded_files and classifier is not None:
         ai_context = {
             "age": age, "weight": weight, "height": height,
             "gender": gender, "goal": goal, "bmi": bmi,
-            "bmi_status": status, "foods": all_foods,
-            "total_nutrients": total, "rda": rda
+            "bmi_status": status, "foods": all_foods
         }
 
         # NUTRIENT SUMMARY
         st.markdown("---")
         st.header("📊 Nutrient Summary")
         
-        col1, col2, col3, col4, col5 = st.columns(5)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric("🔥 Calories", f"{round(total['calories'])}/{rda['calories']}")
         with col2:
@@ -297,105 +219,64 @@ if uploaded_files and classifier is not None:
             st.metric("🍞 Carbs", f"{round(total['carbs'],1)}g/{rda['carbs']}g")
         with col4:
             st.metric("🥑 Fat", f"{round(total['fat'],1)}g/{rda['fat']}g")
-        with col5:
-            st.metric("💊 Vitamins", f"{round(total['vitamins'])}/100")
-
-        # NUTRIENT RINGS
-        col_left, col_right = st.columns([1, 1])
-        
-        with col_left:
-            st.subheader("📈 Nutrient Progress")
-            carbs_p = min(total["carbs"] / rda["carbs"], 1) if rda["carbs"] > 0 else 0
-            protein_p = min(total["protein"] / rda["protein"], 1) if rda["protein"] > 0 else 0
-            fat_p = min(total["fat"] / rda["fat"], 1) if rda["fat"] > 0 else 0
-            vit_p = min(total["vitamins"] / 100, 1)
-
-            fig, ax = plt.subplots(figsize=(6,6))
-            fig.patch.set_facecolor("#0E1117")
-            ax.set_facecolor("#0E1117")
-            progress = [carbs_p, protein_p, fat_p, vit_p]
-            colors = ["#00C2FF", "#00FF7F", "#FF7F50", "#FFD700"]
-
-            for i, p in enumerate(progress):
-                ax.pie([p, 1-p], radius=1 - i*0.18, startangle=90, counterclock=False,
-                       colors=[colors[i], "#1f1f1f"], wedgeprops=dict(width=0.13, edgecolor="none"))
-
-            centre_circle = plt.Circle((0, 0), 0.35, color="#0E1117")
-            ax.add_artist(centre_circle)
-            ax.set(aspect="equal")
-            ax.axis('off')
-            st.pyplot(fig)
-            st.markdown("🔵 Carbs | 🟢 Protein | 🟠 Fat | 🟡 Vitamins")
 
         # HEALTH PROFILE
-        with col_right:
-            st.subheader("🏥 Health Profile")
-            h = height / 100
-            min_w = round(18.5*(h*h),1)
-            max_w = round(24.9*(h*h),1)
-            bmr = calculate_bmr(weight, height, age, gender)
-            st.write(f"**BMI:** {bmi} ({status})")
-            st.write(f"**Ideal Weight:** {min_w}-{max_w} kg")
-            st.write(f"**BMR:** {round(bmr)} kcal/day")
-            st.write(f"**Goal:** {goal}")
+        st.subheader("🏥 Your Health Profile")
+        h = height / 100
+        min_w = round(18.5*(h*h),1)
+        max_w = round(24.9*(h*h),1)
+        bmr = calculate_bmr(weight, height, age, gender)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.info(f"**BMI:** {bmi}\n({status})")
+        with col2:
+            st.info(f"**Ideal:**\n{min_w}-{max_w} kg")
+        with col3:
+            st.info(f"**BMR:**\n{round(bmr)} kcal")
+        with col4:
+            st.info(f"**Goal:**\n{goal}")
 
         # AI CHAT
         st.markdown("---")
         st.header("🤖 AI Health Assistant")
         
-        if 'chat_history' not in st.session_state:
-            st.session_state.chat_history = []
-
-        for msg in st.session_state.chat_history:
+        # Clear chat when new images uploaded
+        if 'current_foods' not in st.session_state or st.session_state.current_foods != all_foods:
+            st.session_state.messages = []
+            st.session_state.current_foods = all_foods
+        
+        # Show messages
+        for msg in st.session_state.messages:
             with st.chat_message(msg["role"]):
                 st.write(msg["content"])
 
-        user_q = st.chat_input("💬 Ask AI about your diet, nutrition, or health...")
-
-        if user_q:
-            st.session_state.chat_history.append({"role": "user", "content": user_q})
-            with st.spinner("🤔 AI is thinking..."):
-                ai_response = get_ai_response(user_q, ai_context)
-            st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
+        # Chat input
+        if prompt := st.chat_input("💬 Ask me anything about your diet, health, or nutrition!"):
+            # Add user message
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            
+            # Generate AI response
+            ai_reply = get_ai_response(prompt, ai_context)
+            
+            # Add AI response
+            st.session_state.messages.append({"role": "assistant", "content": ai_reply})
+            
+            # Force refresh
             st.rerun()
 
-        # AUDIO
-        st.subheader("🔊 Audio Health Advice")
-        advice_text = f"Your BMI is {bmi}, which is {status}. "
-        if bmi > 25:
-            advice_text += "Consider reducing high-calorie foods. "
-        else:
-            advice_text += "Your weight is healthy. "
-        advice_text += f"Today you ate {', '.join(all_foods)}."
-        
-        audio_file = text_to_audio(advice_text)
-        if audio_file:
-            st.audio(audio_file)
-            def cleanup():
-                time.sleep(2)
-                try:
-                    os.remove(audio_file)
-                except:
-                    pass
-            threading.Thread(target=cleanup, daemon=True).start()
-
 else:
-    st.info("""
-    ### 👋 Welcome to GenAI Food & Health Analyzer!
+    st.info("👆 Upload food images to get started!")
+    st.markdown("""
+    ### Features:
+    - 📸 Food Image Recognition
+    - 📊 Nutrient Analysis  
+    - 🏥 Health Metrics (BMI, BMR)
+    - 🤖 AI Health Assistant
     
-    **How to use:**
-    1. Fill in your profile in the sidebar
-    2. Upload food images above
-    3. Chat with AI about your diet!
-    
-    **Try asking:**
+    ### Try asking:
     - "How can I lose weight?"
     - "How much protein do I need?"
     - "What exercises should I do?"
+    - "Are my foods healthy?"
     """)
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.success("📷 Food Classifier: Ready" if classifier else "❌ Not Loaded")
-    with col2:
-        st.info("🤖 AI: Smart Responses")
