@@ -146,25 +146,20 @@ def text_to_audio(text):
     return file.name
 
 # -------------------------
-# AI DIET AGENT
+# AI DIET AGENT (WESTERN)
 # -------------------------
 def diet_agent(age, weight, height, gender, goal, foods, bmi):
 
-    system_prompt = "You are an AI nutrition expert."
+    system_prompt = "You are a Western nutrition expert."
 
     user_prompt = f"""
-    User Details:
-    Age: {age}
-    Weight: {weight}
-    Height: {height}
-    Gender: {gender}
-    Goal: {goal}
-    BMI: {bmi}
-    Current Foods: {foods}
+    Age: {age}, Weight: {weight}, Height: {height}
+    Gender: {gender}, Goal: {goal}, BMI: {bmi}
+    Foods: {foods}
 
     Generate:
     - Diet analysis
-    - Full-day Indian diet plan
+    - Full-day Western diet plan
     - Improvements
     """
 
@@ -195,13 +190,15 @@ if uploaded_files:
 
     total, details = calculate_total(all_foods)
 
+    # DETECTED FOODS
     st.subheader("🍔 Detected Food Items")
     for f in all_foods:
         st.success(f)
 
+    # PER FOOD
     st.subheader("📊 Per Food Nutrients")
     for f, d in details:
-        st.write(f"{f} → Carbs:{round(d['carbs'],1)}, Protein:{round(d['protein'],1)}, Fat:{round(d['fat'],1)}")
+        st.write(f"{f} → Carbs:{round(d['carbs'],1)}, Protein:{round(d['protein'],1)}, Fat:{round(d['fat'],1)}, Vitamins:{round(d['vitamins'],1)}")
 
     # BMI
     bmi, status = calculate_bmi(weight, height)
@@ -210,19 +207,44 @@ if uploaded_files:
     st.write(f"BMI: {bmi} → {status}")
 
     # AUDIO
+    st.subheader("🔊 Smart Audio Advice")
     audio = text_to_audio(f"Your BMI is {bmi}")
     st.audio(audio)
 
-    # -------------------------
-    # ✅ AI DIET PLANNER (VISIBLE FIX)
-    # -------------------------
-    st.subheader("🤖 AI Diet Planner (Agent)")
+    if os.path.exists(audio):
+        os.remove(audio)
 
-    if st.button("🥗 Generate Smart Diet Plan"):
-        with st.spinner("Generating your AI diet plan..."):
+    # -------------------------
+    # ✅ AI DIET PLANNER
+    # -------------------------
+    st.subheader("🤖 AI Diet Planner")
+
+    if st.button("🥗 Generate Diet Plan"):
+
+        with st.spinner("Generating diet plan..."):
             try:
                 plan = diet_agent(age, weight, height, gender, goal, all_foods, bmi)
                 st.write(plan)
+
             except Exception as e:
-                st.error("Error generating diet plan")
-                st.write(e)
+                st.warning("⚠️ API limit reached. Showing basic plan.")
+
+                st.write("""
+### 🥗 Basic Western Diet Plan
+
+Breakfast:
+- Oatmeal + milk + fruits
+- Boiled eggs
+
+Lunch:
+- Grilled chicken + brown rice + vegetables
+
+Snacks:
+- Apple + almonds
+
+Dinner:
+- Whole wheat bread + salad + soup
+
+Tip:
+Avoid fried and processed foods. Drink more water.
+""")
