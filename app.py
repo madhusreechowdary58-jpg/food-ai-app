@@ -376,7 +376,7 @@ if uploaded_files:
         os.remove(audio)
 
 # =========================================================
-# 🤖 AI HEALTH ASSISTANT (FINAL - ERROR FREE)
+# 🤖 AI HEALTH ASSISTANT (FINAL FIXED)
 # =========================================================
 
 st.markdown("---")
@@ -384,25 +384,34 @@ st.subheader("🤖 AI Health Assistant")
 
 @st.cache_resource
 def load_text_generator():
-    return pipeline("text2text-generation", model="google/flan-t5-base")
+    return pipeline("text-generation", model="gpt2")
 
 text_generator = load_text_generator()
 
 user_query = st.text_input("Ask anything about health/diet:")
 
 def health_ai_agent(task, context=""):
-    if "summarize" in task.lower():
-        prompt = f"Summarize this:\n{context}"
-    elif "diet" in task.lower():
-        prompt = "Give a healthy diet plan in short."
-    elif "tips" in task.lower():
-        prompt = "Give 3 simple health tips."
-    elif "joke" in task.lower():
-        prompt = "Tell a short funny health joke."
-    else:
-        prompt = f"Answer clearly: {task}"
+    task_lower = task.lower()
 
-    result = text_generator(prompt, max_new_tokens=80)
+    if "summarize" in task_lower:
+        prompt = f"Summarize the following health report in simple words:\n{context}\nSummary:"
+    elif "diet" in task_lower:
+        prompt = "Give a short healthy Indian diet plan for a 20-year-old male."
+    elif "tips" in task_lower:
+        prompt = "Give 3 simple daily health tips for fitness."
+    elif "muscle" in task_lower:
+        prompt = "Give tips for muscle gain diet and exercise."
+    elif "weight" in task_lower:
+        prompt = "Give tips for weight loss and fat reduction."
+    else:
+        prompt = f"Question: {task}\nAnswer:"
+
+    result = text_generator(
+        prompt,
+        max_new_tokens=60,
+        temperature=0.7
+    )
+
     return result[0]['generated_text']
 
 if st.button("Ask AI Assistant"):
