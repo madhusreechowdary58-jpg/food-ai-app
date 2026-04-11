@@ -1,12 +1,12 @@
 import streamlit as st
-from transformers import pipeline
+from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
 from PIL import Image
 from gtts import gTTS
 import tempfile
 import os
 import requests
 import matplotlib.pyplot as plt
-import google.generativeai as genai
+import torch
 import json
 
 # -------------------------
@@ -36,14 +36,16 @@ def load_food_model():
 
 @st.cache_resource
 def load_text_model():
-    return pipeline("text2text-generation", model="google/flan-t5-base")
+    tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-base")
+    model = AutoModelForSeq2SeqLM.from_pretrained("google/flan-t5-base")
+    return tokenizer, model
 
 @st.cache_resource
 def load_zs_model():
     return pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
 
 classifier = load_food_model()
-text_model = load_text_model()
+tokenizer, text_model = load_text_model()
 zs_classifier = load_zs_model()
 
 # -------------------------
@@ -61,7 +63,6 @@ if person_file and "person_estimates" not in st.session_state:
         try:
             img = Image.open(person_file)
 
-            # Zero-shot classify age group
             zs_age = zs_classifier(
                 "person in photo",
                 candidate_labels=["child under 18", "young adult 18-30", "adult 30-50", "senior above 50"]
@@ -318,16 +319,18 @@ Carbs: {round(total['carbs'], 1)}
 # -------------------------
 def generate_meal_plan_ai(goal, bmi_status, age):
     prompt = f"Suggest a healthy one day meal plan for a {age} year old with BMI status {bmi_status} and goal {goal}. Include breakfast, lunch, snack and dinner."
-    result = text_model(prompt, max_length=200)
-    return result[0]["generated_text"]
+    inputs = tokenizer(prompt, return_tensors="pt")
+    outputs = text_model.generate(**inputs, max_new_tokens=200)
+    return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 # -------------------------
 # AI HEALTH ADVICE - Flan-T5
 # -------------------------
 def generate_health_advice_ai(bmi_status, goal, foods):
     prompt = f"Give health advice for a person who is {bmi_status}, wants to {goal} and ate {', '.join(foods)} today."
-    result = text_model(prompt, max_length=200)
-    return result[0]["generated_text"]
+    inputs = tokenizer(prompt, return_tensors="pt")
+    outputs = text_model.generate(**inputs, max_new_tokens=200)
+    return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 # -------------------------
 # AI FOOD RISK - Zero Shot
@@ -377,6 +380,8 @@ if uploaded_files:
         all_foods.append(food)
 
     total, details = calculate_total(all_foods)
+    bmi, status = calculate_bmi(weight, height)
+    rda = get_rda(age, weight, height, gender)
 
     # DETECTED FOODS
     st.subheader("🍔 Detected Food Items")
@@ -405,7 +410,6 @@ if uploaded_files:
 
     with col2:
         st.markdown("### 🟢 Nutrient Activity Rings")
-        rda = get_rda(age, weight, height, gender)
 
         carbs_p = min(total["carbs"] / rda["carbs"], 1)
         protein_p = min(total["protein"] / rda["protein"], 1)
@@ -448,7 +452,6 @@ if uploaded_files:
 
     # ANALYSIS
     st.subheader("🤖 Health Analysis")
-    bmi, status = calculate_bmi(weight, height)
     analysis = generate_analysis(all_foods, total, age, weight, height, gender, goal)
     st.write(analysis)
 
@@ -456,25 +459,19 @@ if uploaded_files:
     st.subheader("🎯 Goal Suitability Analysis")
     st.info(evaluate_goal(bmi, goal))
 
-    # -------------------------
     # AI MEAL PLAN
-    # -------------------------
     st.subheader("🗓️ AI Meal Plan (Flan-T5)")
     with st.spinner("Generating personalized meal plan..."):
         meal = generate_meal_plan_ai(goal, status, age)
         st.info(meal)
 
-    # -------------------------
     # AI HEALTH ADVICE
-    # -------------------------
     st.subheader("💡 AI Health Advice (Flan-T5)")
     with st.spinner("Generating health advice..."):
         advice = generate_health_advice_ai(status, goal, all_foods)
         st.success(advice)
 
-    # -------------------------
     # AI FOOD RISK
-    # -------------------------
     st.subheader("⚠️ AI Food Risk Classification (Zero-Shot)")
     with st.spinner("Classifying food risk..."):
         risk_label, risk_score = classify_food_risk(all_foods)
@@ -485,9 +482,7 @@ if uploaded_files:
         else:
             st.error(f"Your meal is: **{risk_label}** ({risk_score}% confidence)")
 
-    # -------------------------
     # AI DIET SENTIMENT
-    # -------------------------
     st.subheader("📊 AI Diet Sentiment (Zero-Shot)")
     with st.spinner("Analyzing diet balance..."):
         sentiment, conf = analyze_diet_sentiment(total, rda)
