@@ -1,8 +1,7 @@
+streamlit
 transformers
 torch
 Pillow
-requests
-streamlit
 gTTS
+requests
 matplotlib
-accelerate
