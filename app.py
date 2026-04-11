@@ -726,3 +726,48 @@ else:
         </div>
     </div>
     """, unsafe_allow_html=True)
+# =========================================================
+# 🤖 AI HEALTH ASSISTANT (FINAL FIXED)
+# =========================================================
+
+st.markdown("---")
+st.subheader("🤖 AI Health Assistant")
+
+@st.cache_resource
+def load_text_generator():
+    return pipeline("text-generation", model="gpt2")
+
+text_generator = load_text_generator()
+
+user_query = st.text_input("Ask anything about health/diet:")
+
+def health_ai_agent(task, context=""):
+    task_lower = task.lower()
+
+       if "diet" in task_lower:
+        prompt = "Give a short healthy Indian diet plan for a 20-year-old male."
+    elif "tips" in task_lower:
+        prompt = "Give 3 simple daily health tips for fitness."
+    elif "muscle" in task_lower:
+        prompt = "Give tips for muscle gain diet and exercise."
+    elif "weight" in task_lower:
+        prompt = "Give tips for weight loss and fat reduction."
+    else:
+        prompt = f"Question: {task}\nAnswer:"
+
+    result = text_generator(
+        prompt,
+        max_new_tokens=60,
+        temperature=0.7
+    )
+
+    return result[0]['generated_text']
+
+if st.button("Ask AI Assistant"):
+    try:
+        context_data = analysis
+    except:
+        context_data = "general health"
+
+    response = health_ai_agent(user_query, context_data)
+    st.success(response)
