@@ -30,18 +30,13 @@ gender = st.sidebar.selectbox("Gender", ["Male", "Female"])
 goal = st.sidebar.selectbox("Goal", ["Weight Loss", "Muscle Gain", "Maintain"])
 
 # -------------------------
-# LOAD MODELS
+# LOAD MODEL
 # -------------------------
 @st.cache_resource
 def load_model():
     return pipeline("image-classification", model="nateraw/food")
 
-@st.cache_resource
-def load_text_model():
-    return pipeline("text-generation", model="gpt2")
-
 classifier = load_model()
-generator = load_text_model()
 
 # -------------------------
 # API KEY
@@ -169,44 +164,112 @@ def analyze_deficiency(total, rda):
 # FOOD SUITABILITY
 # -------------------------
 def evaluate_food_health(foods, total, bmi, goal, age):
+
     unhealthy = ["burger", "fries", "pizza", "donut", "hot dog"]
     feedback = []
 
     junk_items = [f for f in foods if any(j in f.lower() for j in unhealthy)]
 
     if bmi > 25:
-        feedback.append("You are overweight.")
+        feedback.append("You are overweight. High-calorie foods increase fat storage and may lead to heart disease.")
     elif bmi < 18.5:
-        feedback.append("You are underweight.")
+        feedback.append("You are underweight. Low-nutrient foods will not help in healthy weight gain.")
     else:
-        feedback.append("Your BMI is normal.")
+        feedback.append("Your BMI is normal. Maintaining diet quality is important.")
 
     if junk_items:
-        feedback.append(f"Unhealthy foods: {', '.join(junk_items)}")
+        feedback.append(f"The foods {', '.join(junk_items)} are unhealthy.")
+        feedback.append("These foods contain high unhealthy fats, sugar, and low nutrients.")
+
+        if age < 18:
+            feedback.append("May affect growth and immunity.")
+        elif age <= 40:
+            feedback.append("May lead to weight gain and poor metabolism.")
+        else:
+            feedback.append("Increases heart and cholesterol risks.")
+
+        if goal == "Weight Loss":
+            feedback.append("Not suitable for weight loss.")
+        if goal == "Muscle Gain":
+            feedback.append("Does not support muscle growth.")
+
         feedback.append("Avoid fried and processed foods.")
+        feedback.append("Eat vegetables, fruits, whole grains, and proteins.")
+
     else:
         feedback.append("Foods are healthy in moderation.")
 
     return feedback
 
 # -------------------------
+# GOAL SUITABILITY
+# -------------------------
+def evaluate_goal(bmi, goal):
+
+    if bmi < 18.5:
+        if goal == "Weight Loss":
+            return "❌ You are underweight. Weight loss is not recommended."
+        else:
+            return "✅ Your goal is appropriate."
+
+    elif bmi > 25:
+        if goal == "Muscle Gain":
+            return "⚠️ You are overweight. Focus on fat loss first."
+        elif goal == "Maintain":
+            return "⚠️ Consider weight loss instead."
+        else:
+            return "✅ Your goal aligns with your health."
+
+    else:
+        return "✅ Your goal is suitable."
+
+# -------------------------
 # ANALYSIS
 # -------------------------
 def generate_analysis(foods, total, age, weight, height, gender, goal):
+
     bmi, status = calculate_bmi(weight, height)
     rda = get_rda(age, weight, height, gender)
     deficiency = analyze_deficiency(total, rda)
     feedback = evaluate_food_health(foods, total, bmi, goal, age)
 
-    return f"""
-BMI: {bmi} ({status})
-Foods: {foods}
-Calories: {round(total['calories'],1)}
+    h = height / 100
+    min_w = round(18.5*(h*h),1)
+    max_w = round(24.9*(h*h),1)
 
-Feedback:
+    bmr = calculate_bmr(weight, height, age, gender)
+
+    return f"""
+### 🧠 Personalized Health Analysis
+
+👤 Age: {age}  
+⚧ Gender: {gender}
+
+📏 Height: {round(height/30.48,1)} ft
+
+⚖️ BMI: {bmi} → {status}  
+Ideal Weight: {min_w}-{max_w} kg
+
+🔥 BMR: {round(bmr)} kcal  
+
+📊 Recommended:
+Calories: {rda['calories']}
+Protein: {rda['protein']}
+Fat: {rda['fat']}
+Carbs: {rda['carbs']}
+
+🍔 Foods: {foods}
+
+📊 Your Intake:
+Calories: {round(total['calories'],1)}
+Protein: {round(total['protein'],1)}
+Fat: {round(total['fat'],1)}
+Carbs: {round(total['carbs'],1)}
+
+🧾 Food Suitability & Health Impact:
 {chr(10).join(feedback)}
 
-Deficiency:
+⚠️ Nutritional Feedback:
 {', '.join(deficiency)}
 """
 
@@ -237,45 +300,142 @@ if uploaded_files:
 
     total, details = calculate_total(all_foods)
 
+    # DETECTED FOODS
     st.subheader("🍔 Detected Food Items")
     for f in all_foods:
         st.success(f)
 
-    st.subheader("📊 Total Nutrients")
-    st.write(total)
+    # PER FOOD
+    st.subheader("📊 Per Food Nutrients")
+    for f, d in details:
+        st.write(f"{f} → Carbs:{round(d['carbs'],1)}, Protein:{round(d['protein'],1)}, Fat:{round(d['fat'],1)}, Vitamins:{round(d['vitamins'],1)}")
 
+    # TOTAL + RINGS
+    st.subheader("📊 Total Nutrient Consumption")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.metric("Carbs", round(total["carbs"],1))
+        st.metric("Protein", round(total["protein"],1))
+        st.metric("Fat", round(total["fat"],1))
+        st.metric("Vitamins", round(total["vitamins"],1))
+
+    with col2:
+        st.markdown("### 🟢 Nutrient Activity Rings")
+
+        rda = get_rda(age, weight, height, gender)
+
+        carbs_p = min(total["carbs"] / rda["carbs"], 1)
+        protein_p = min(total["protein"] / rda["protein"], 1)
+        fat_p = min(total["fat"] / rda["fat"], 1)
+        vit_p = min(total["vitamins"] / 100, 1)
+
+        progress = [carbs_p, protein_p, fat_p, vit_p]
+        colors = ["#00C2FF", "#00FF7F", "#FF7F50", "#FFD700"]
+
+        fig, ax = plt.subplots(figsize=(6,6))
+        fig.patch.set_facecolor("#0E1117")
+        ax.set_facecolor("#0E1117")
+
+        for i, p in enumerate(progress):
+            ax.pie(
+                [p, 1-p],
+                radius=1 - i*0.18,
+                startangle=90,
+                counterclock=False,
+                colors=[colors[i], "#1f1f1f"],
+                wedgeprops=dict(width=0.13, edgecolor="none")
+            )
+
+        centre_circle = plt.Circle((0, 0), 0.35, color="#0E1117")
+        ax.add_artist(centre_circle)
+
+        ax.set(aspect="equal")
+        ax.axis('off')
+
+        st.pyplot(fig)
+
+        # LEGEND
+        st.markdown("### 🏷️ Nutrient Legend")
+        c1, c2, c3, c4 = st.columns(4)
+
+        with c1:
+            st.markdown("🔵 **Carbs**")
+        with c2:
+            st.markdown("🟢 **Protein**")
+        with c3:
+            st.markdown("🟠 **Fat**")
+        with c4:
+            st.markdown("🟡 **Vitamins**")
+
+        st.caption("Outer → Carbs | Inner → Vitamins (Progress towards daily requirement)")
+
+    # ANALYSIS
     st.subheader("🤖 Health Analysis")
     analysis = generate_analysis(all_foods, total, age, weight, height, gender, goal)
     st.write(analysis)
 
-    audio = text_to_audio(analysis)
+    # GOAL
+    st.subheader("🎯 Goal Suitability Analysis")
+    bmi, _ = calculate_bmi(weight, height)
+    st.info(evaluate_goal(bmi, goal))
+
+    # AUDIO
+    st.subheader("🔊 Smart Audio Advice")
+
+    feedback = evaluate_food_health(all_foods, total, bmi, goal, age)
+    audio_text = "Health advice: "
+
+    for f in feedback:
+        audio_text += f + " "
+
+    audio = text_to_audio(audio_text)
     st.audio(audio)
 
-# =========================================================
-# ✅ NEW FEATURE: AI ASSISTANT (ADDED - DOES NOT DISTURB)
+    if os.path.exists(audio):
+        os.remove(audio)
+    # =========================================================
+# 🤖 EXTRA FEATURE: AI HEALTH ASSISTANT (ADDED ONLY)
 # =========================================================
 
 st.markdown("---")
 st.subheader("🤖 AI Health Assistant")
 
-user_query = st.text_input("Ask anything (diet / tips / summary / health advice):")
+# Load text model separately (no disturbance)
+@st.cache_resource
+def load_text_generator():
+    return pipeline("text-generation", model="gpt2")
 
-def ai_agent(query, context=""):
-    query = query.lower()
+text_generator = load_text_generator()
 
-    if "diet" in query:
-        prompt = f"Give short diet advice for {context}"
-    elif "tips" in query:
-        prompt = f"Give 3 health tips for {context}"
-    elif "summary" in query:
-        prompt = f"Summarize this:\n{context}"
+# User input
+user_query = st.text_input("Ask health/diet/tips questions:")
+
+# AI Agent function (simple like your 7th experiment but adapted)
+def health_ai_agent(task, context=""):
+    task = task.lower()
+
+    if "summarize" in task:
+        prompt = "Summarize this health report:\n" + context
+    elif "diet" in task:
+        prompt = "Give a short healthy diet suggestion."
+    elif "tips" in task:
+        prompt = "Give 3 simple health tips."
+    elif "joke" in task:
+        prompt = "Tell a short funny health joke."
     else:
-        prompt = query
+        prompt = task
 
-    result = generator(prompt, max_new_tokens=80)
+    result = text_generator(prompt, max_new_tokens=60)
     return result[0]['generated_text']
 
-if st.button("Run AI Assistant"):
-    context = analysis if 'analysis' in locals() else "general health"
-    response = ai_agent(user_query, context)
-    st.write(response)
+# Button action
+if st.button("Ask AI Assistant"):
+    try:
+        context_data = analysis  # use your existing analysis safely
+    except:
+        context_data = "general health"
+
+    response = health_ai_agent(user_query, context_data)
+    st.success(response)
