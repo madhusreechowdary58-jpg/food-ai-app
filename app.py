@@ -325,68 +325,68 @@ MEAL_SLOT_FRACTIONS = {
 MEAL_TEMPLATES = {
     "Weight Loss": {
         "Breakfast": [
-            (1.00, "Oats + Banana Smoothie",    lambda c: f"{max(40,round(c/5.8))}g oats, 1 banana, 200ml low-fat milk, 1 tsp honey"),
-            (0.90, "Poha + Green Tea",           lambda c: f"{max(50,round(c/4.3))}g poha, mixed veggies, 1 cup green tea"),
-            (0.80, "Idli + Sambar",              lambda c: f"{max(2, round(c/95))} idli, 1 cup sambar (no chutney)"),
+            (1.00, "Veggie Egg White Omelette",  lambda c: f"{max(3,round(c/55))} egg whites, spinach, tomato, mushrooms, 1 slice wholegrain toast"),
+            (0.90, "Greek Yogurt Parfait",        lambda c: f"{max(150,round(c/0.9))}g low-fat Greek yogurt, {max(30,round(c/9))}g granola, mixed berries"),
+            (0.80, "Overnight Oats",              lambda c: f"{max(40,round(c/4.8))}g rolled oats, 150ml almond milk, chia seeds, sliced strawberries"),
         ],
         "Lunch": [
-            (1.00, "Brown Rice + Dal + Sabzi",   lambda c: f"{max(60,round(c/5.5))}g brown rice, 1 cup dal, mixed sabzi, salad"),
-            (0.90, "Multigrain Roti + Paneer",   lambda c: f"{max(1, round(c/180))} rotis, {max(60,round(c/5.5))}g paneer bhurji, salad"),
-            (0.85, "Quinoa Veggie Bowl",          lambda c: f"{max(55,round(c/5))}g quinoa, chickpeas, cucumber, lemon dressing"),
+            (1.00, "Grilled Chicken Salad",       lambda c: f"{max(100,round(c/1.8))}g grilled chicken breast, mixed greens, cherry tomatoes, cucumber, balsamic vinaigrette"),
+            (0.90, "Turkey & Avocado Wrap",       lambda c: f"{max(80,round(c/2))}g turkey slices, ½ avocado, lettuce, tomato in 1 wholegrain wrap"),
+            (0.85, "Tuna Nicoise Salad",          lambda c: f"{max(90,round(c/1.9))}g canned tuna, boiled egg, green beans, olives, mixed greens, lemon dressing"),
         ],
         "Dinner": [
-            (1.00, "Grilled Chicken + Salad",    lambda c: f"{max(100,round(c/1.8))}g grilled chicken, large salad, lemon"),
-            (0.88, "Moong Dal Soup + Roti",      lambda c: f"1 cup moong soup, {max(1,round(c/220))} roti"),
-            (0.80, "Vegetable Stir Fry + Tofu",  lambda c: f"mixed veggies, {max(70,round(c/2.6))}g tofu, minimal oil"),
+            (1.00, "Baked Salmon + Steamed Veg",  lambda c: f"{max(120,round(c/1.7))}g baked salmon, broccoli, asparagus, lemon-herb seasoning"),
+            (0.88, "Grilled Turkey Breast + Salad",lambda c: f"{max(110,round(c/1.9))}g grilled turkey, large garden salad, olive oil dressing"),
+            (0.80, "Zucchini Noodles + Marinara", lambda c: f"{max(200,round(c/1.5))}g zucchini noodles, homemade tomato marinara, {max(50,round(c/5))}g lean ground turkey"),
         ],
         "Snacks": [
-            (1.00, "Mixed Nuts",                 lambda c: f"{max(15,round(c/1.3))}g almonds + walnuts"),
-            (0.85, "Greek Yogurt + Berries",     lambda c: f"{max(80,round(c/0.85))}g Greek yogurt, handful berries"),
-            (0.70, "Seasonal Fruit",             lambda c: f"1 medium fruit (apple/pear/orange)"),
+            (1.00, "Apple + Almond Butter",       lambda c: f"1 medium apple, {max(10,round(c/19))}g almond butter"),
+            (0.85, "Cottage Cheese + Cucumber",   lambda c: f"{max(80,round(c/1.3))}g low-fat cottage cheese, sliced cucumber, black pepper"),
+            (0.70, "Celery Sticks + Hummus",      lambda c: f"celery sticks, {max(30,round(c/2.3))}g hummus"),
         ],
     },
     "Muscle Gain": {
         "Breakfast": [
-            (1.00, "Egg Omelette + Toast",       lambda c: f"{max(3, round(c/88))} eggs, {max(2,round(c/176))} multigrain toast"),
-            (0.92, "Protein Oats",               lambda c: f"{max(60,round(c/5.2))}g oats, 1 scoop protein powder, banana, 1 tbsp peanut butter"),
-            (0.85, "Paneer Paratha + Curd",      lambda c: f"{max(1, round(c/198))} paneer paratha, {max(80,round(c/5))}g curd"),
+            (1.00, "Scrambled Eggs + Toast",      lambda c: f"{max(3,round(c/75))} whole eggs, {max(2,round(c/175))} slices wholegrain toast, 1 tbsp butter, side of sliced avocado"),
+            (0.92, "Protein Pancakes",            lambda c: f"{max(60,round(c/5))}g oat flour, {max(2,round(c/230))} eggs, 1 scoop whey protein, topped with banana & honey"),
+            (0.85, "Bagel + Smoked Salmon",       lambda c: f"1 whole wheat bagel, {max(80,round(c/3.5))}g smoked salmon, cream cheese, capers, red onion"),
         ],
         "Lunch": [
-            (1.00, "Chicken Rice Bowl",          lambda c: f"{max(140,round(c/2.4))}g chicken breast, {max(75,round(c/5.5))}g rice, veggies"),
-            (0.92, "Rajma + Rice + Curd",        lambda c: f"1 cup rajma, {max(75,round(c/5.5))}g rice, {max(75,round(c/5.5))}g curd"),
-            (0.88, "Egg Fried Rice + Dal",       lambda c: f"{max(2, round(c/220))} eggs fried rice, 1 cup dal"),
+            (1.00, "Chicken & Brown Rice Bowl",   lambda c: f"{max(150,round(c/2.3))}g grilled chicken breast, {max(80,round(c/5.2))}g brown rice, roasted veggies, olive oil"),
+            (0.92, "Beef Stir Fry + Noodles",     lambda c: f"{max(130,round(c/2.5))}g lean beef strips, {max(75,round(c/5))}g egg noodles, bell peppers, soy sauce, sesame oil"),
+            (0.88, "Tuna Pasta Salad",            lambda c: f"{max(70,round(c/4.8))}g wholegrain pasta, {max(100,round(c/2.5))}g tuna, sweetcorn, mayo, mixed greens"),
         ],
         "Dinner": [
-            (1.00, "Grilled Fish + Sweet Potato",lambda c: f"{max(140,round(c/1.9))}g fish, 1 sweet potato, salad"),
-            (0.92, "Paneer Tikka + Roti + Dal",  lambda c: f"{max(90,round(c/4.3))}g paneer tikka, {max(1,round(c/215))} rotis, 1 cup dal"),
-            (0.88, "Lentil Soup + Rice + Egg",   lambda c: f"1 cup lentils, {max(65,round(c/5.5))}g rice, {max(1,round(c/215))} boiled egg"),
+            (1.00, "Sirloin Steak + Sweet Potato",lambda c: f"{max(150,round(c/2.0))}g lean sirloin, 1 medium sweet potato, steamed green beans, garlic butter"),
+            (0.92, "Baked Chicken Thighs + Quinoa",lambda c: f"{max(140,round(c/2.2))}g baked chicken thighs, {max(70,round(c/5))}g quinoa, roasted broccoli, olive oil"),
+            (0.88, "Salmon + Mashed Potato",      lambda c: f"{max(130,round(c/2.4))}g baked salmon, {max(150,round(c/2.2))}g mashed potato (with milk), steamed spinach"),
         ],
         "Snacks": [
-            (1.00, "Peanut Butter + Banana",     lambda c: f"{max(1, round(c/190))} tbsp peanut butter, 1 banana"),
-            (0.85, "Boiled Eggs",                lambda c: f"{max(1, round(c/54))} boiled eggs"),
-            (0.75, "Chana Chaat",                lambda c: f"{max(70,round(c/1.8))}g boiled chickpeas, spices, lemon"),
+            (1.00, "Protein Shake + Banana",      lambda c: f"1 scoop whey protein (shaken with 300ml milk), 1 large banana"),
+            (0.85, "Peanut Butter Rice Cakes",    lambda c: f"{max(2,round(c/120))} rice cakes, {max(15,round(c/16))}g peanut butter, honey drizzle"),
+            (0.75, "Hard Boiled Eggs + Cheese",   lambda c: f"{max(2,round(c/80))} boiled eggs, {max(20,round(c/22))}g cheddar cheese"),
         ],
     },
     "Maintain": {
         "Breakfast": [
-            (1.00, "Upma + Coconut Chutney",     lambda c: f"{max(60,round(c/4.5))}g upma, small chutney portion"),
-            (0.92, "Dosa + Sambar",              lambda c: f"{max(1, round(c/145))} dosas, 1 cup sambar"),
-            (0.85, "Muesli + Milk + Fruits",     lambda c: f"{max(40,round(c/5.5))}g muesli, 200ml milk, mixed fruits"),
+            (1.00, "Avocado Toast + Poached Eggs",lambda c: f"{max(2,round(c/190))} slices sourdough, ½ avocado, {max(1,round(c/370))} poached egg, chilli flakes"),
+            (0.92, "Smoothie Bowl",               lambda c: f"{max(150,round(c/1.5))}g blended frozen berries + banana, topped with {max(25,round(c/14))}g granola, chia seeds, sliced kiwi"),
+            (0.85, "Wholegrain Cereal + Milk",    lambda c: f"{max(50,round(c/5.5))}g wholegrain cereal, 200ml semi-skimmed milk, handful blueberries"),
         ],
         "Lunch": [
-            (1.00, "Dal + Roti + Sabzi + Curd",  lambda c: f"{max(1, round(c/200))} rotis, 1 cup dal, sabzi, {max(80,round(c/5))}g curd"),
-            (0.92, "Mixed Veg Pulao + Raita",    lambda c: f"{max(75,round(c/4.7))}g pulao, 1 cup raita"),
-            (0.88, "Chole + Rice",               lambda c: f"1 cup chole, {max(65,round(c/5.5))}g rice, onion salad"),
+            (1.00, "Grilled Chicken Sandwich",    lambda c: f"{max(100,round(c/2.2))}g grilled chicken, wholegrain baguette, lettuce, tomato, mustard mayo, side salad"),
+            (0.92, "Lentil & Vegetable Soup",     lambda c: f"{max(150,round(c/1.8))}g lentil soup, 1 wholegrain roll, mixed salad"),
+            (0.88, "Caesar Salad + Grilled Shrimp",lambda c: f"{max(100,round(c/1.9))}g grilled shrimp, romaine lettuce, {max(15,round(c/25))}g parmesan, croutons, Caesar dressing"),
         ],
         "Dinner": [
-            (1.00, "Khichdi + Papad",            lambda c: f"{max(80,round(c/3.8))}g moong dal khichdi, 1 papad"),
-            (0.90, "Roti + Sabzi + Soup",        lambda c: f"{max(1, round(c/162))} rotis, sabzi, 1 cup vegetable soup"),
-            (0.83, "Grilled Veggies + Cottage Cheese", lambda c: f"mixed grilled veggies, {max(75,round(c/3.6))}g cottage cheese"),
+            (1.00, "Roast Chicken + Roast Veg",   lambda c: f"{max(130,round(c/2.1))}g roast chicken breast, roasted potato, carrots, parsnips, gravy"),
+            (0.90, "Pasta Primavera",             lambda c: f"{max(70,round(c/4.5))}g wholegrain pasta, mixed seasonal veggies, olive oil, garlic, parmesan"),
+            (0.83, "Baked Cod + New Potatoes",    lambda c: f"{max(120,round(c/2.0))}g baked cod, {max(120,round(c/2.5))}g new potatoes, green beans, lemon-butter sauce"),
         ],
         "Snacks": [
-            (1.00, "Roasted Makhana",            lambda c: f"{max(20,round(c/2.8))}g makhana, lightly spiced"),
-            (0.88, "Fruit Bowl",                 lambda c: f"mixed seasonal fruits (~{c}kcal portion)"),
-            (0.75, "Sprouts Salad",              lambda c: f"1 cup sprouted moong, tomato, lemon"),
+            (1.00, "Mixed Nuts & Dried Fruit",    lambda c: f"{max(20,round(c/3.2))}g mixed nuts, {max(15,round(c/4))}g dried cranberries or raisins"),
+            (0.88, "Cheese & Wholegrain Crackers",lambda c: f"{max(20,round(c/3.5))}g cheddar, {max(3,round(c/60))} wholegrain crackers"),
+            (0.75, "Fruit & Yogurt Cup",          lambda c: f"{max(100,round(c/1.1))}g low-fat yogurt, sliced apple or grapes"),
         ],
     },
 }
@@ -426,7 +426,7 @@ def get_meal_recommendations(goal, bmi, age, weight, rda):
         tips.append("🕐 Eat every 3–4 hours to maintain stable blood sugar and energy.")
 
     if age > 40:
-        tips.append("❤️ Prioritize calcium-rich foods (dairy/ragi) and limit sodium for heart health.")
+        tips.append("❤️ Prioritize calcium-rich foods (dairy, leafy greens) and limit sodium for heart health.")
     elif age < 20:
         tips.append("🌱 Ensure adequate calcium & iron intake for healthy growth and development.")
 
