@@ -407,7 +407,14 @@ st.subheader("🤖 AI Health Assistant")
 def load_text_generator():
     return pipeline("text-generation", model="gpt2")
 
-qa_model = pipeline("question-answering")
+@st.cache_resource
+def load_qa_model():
+    return pipeline(
+        "question-answering",
+        model="distilbert-base-cased-distilled-squad"
+    )
+
+qa_model = load_qa_model()
 text_generator = load_text_generator()
 
 user_query = st.text_input("Ask anything about health/diet:")
