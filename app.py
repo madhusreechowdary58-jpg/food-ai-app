@@ -6,8 +6,7 @@ import tempfile
 import os
 import requests
 import matplotlib.pyplot as plt
-import anthropic
-import base64
+import google.generativeai as genai
 import json
 
 # -------------------------
@@ -22,17 +21,16 @@ st.markdown("---")
 # API KEYS
 # -------------------------
 USDA_API_KEY = st.secrets["USDA_API_KEY"]
-ANTHROPIC_API_KEY = st.secrets["ANTHROPIC_API_KEY"]
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+
+genai.configure(api_key=GEMINI_API_KEY)
 
 # -------------------------
-# PERSON DETECTION via Claude Vision
+# PERSON DETECTION via Gemini Vision
 # -------------------------
 def estimate_from_person_image(image_file):
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-
-    image_bytes = image_file.read()
-    b64_image = base64.standard_b64encode(image_bytes).decode("utf-8")
-    image_file.seek(0)
+    model = genai.GenerativeModel("gemini-1.5-flash")
+    img = Image.open(image_file)
 
     prompt = """Look at this person's photo and estimate their physical attributes.
 Return ONLY a valid JSON object with these keys and nothing else:
@@ -46,27 +44,8 @@ Return ONLY a valid JSON object with these keys and nothing else:
 Base your estimate on visible cues: body frame, face, posture, proportions.
 If the image does not contain a clear person, return all values as null."""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=256,
-        messages=[{
-            "role": "user",
-            "content": [
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/jpeg",
-                        "data": b64_image
-                    }
-                },
-                {"type": "text", "text": prompt}
-            ]
-        }]
-    )
-
-    raw = response.content[0].text.strip()
-    raw = raw.replace("```json", "").replace("```", "").strip()
+    response = model.generate_content([prompt, img])
+    raw = response.text.strip().replace("```json", "").replace("```", "").strip()
     return json.loads(raw)
 
 # -------------------------
@@ -80,7 +59,7 @@ person_file = st.sidebar.file_uploader(
 )
 
 if person_file and "person_estimates" not in st.session_state:
-    with st.spinner("Analyzing your photo with AI..."):
+    with st.spinner("Analyzing your photo with Gemini AI..."):
         try:
             estimates = estimate_from_person_image(person_file)
             if estimates.get("age"):
