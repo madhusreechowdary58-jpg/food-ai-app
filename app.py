@@ -36,7 +36,7 @@ def load_classifier():
 
 @st.cache_resource
 def load_chatbot():
-    return pipeline("text-generation", model="gpt2")
+    pipeline("text-generation", model="distilgpt2")
 
 classifier = load_classifier()
 chatbot = load_chatbot()
