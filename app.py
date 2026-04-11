@@ -312,99 +312,98 @@ def evaluate_goal(bmi, goal):
 # MEAL RECOMMENDATIONS (dynamic — scaled to person's calorie target)
 # -------------------------
 
-# Base meal templates with per-100kcal scaling factors
-# Each entry: (name, description_template, base_kcal, breakfast_frac, lunch_frac, dinner_frac, snack_frac)
-# Fractions define what % of daily calories this meal slot should cover
-
+# Fractions define what % of daily calories each meal slot should cover
 MEAL_SLOT_FRACTIONS = {
-    "Weight Loss":  {"Breakfast": 0.25, "Lunch": 0.35, "Dinner": 0.28, "Snacks": 0.12},
-    "Muscle Gain":  {"Breakfast": 0.28, "Lunch": 0.35, "Dinner": 0.28, "Snacks": 0.09},
-    "Maintain":     {"Breakfast": 0.25, "Lunch": 0.35, "Dinner": 0.30, "Snacks": 0.10},
+    "Weight Loss": {"Breakfast": 0.25, "Lunch": 0.35, "Dinner": 0.28, "Snacks": 0.12},
+    "Muscle Gain": {"Breakfast": 0.28, "Lunch": 0.35, "Dinner": 0.28, "Snacks": 0.09},
+    "Maintain":    {"Breakfast": 0.25, "Lunch": 0.35, "Dinner": 0.30, "Snacks": 0.10},
 }
 
-# Template meals — description includes {qty} placeholder scaled dynamically
+# Each option has its own calorie multiplier (relative to slot target) and a quantity-scaling fn.
+# Multipliers:  1.0 = on-target,  0.9 = lighter alternative,  0.8 = lightest option
+# desc_fn receives the option's actual kcal so quantities differ between cards.
 MEAL_TEMPLATES = {
     "Weight Loss": {
         "Breakfast": [
-            ("Oats + Banana Smoothie",     lambda c: f"{max(40, round(c/8))}g oats, 1 banana, 200ml low-fat milk, 1 tsp honey"),
-            ("Poha + Green Tea",           lambda c: f"{max(60, round(c/5))}g poha, mixed veggies, 1 cup green tea"),
-            ("Idli + Sambar",              lambda c: f"{max(2, round(c/130))} idli, 1 cup sambar (no chutney)"),
+            (1.00, "Oats + Banana Smoothie",    lambda c: f"{max(40,round(c/5.8))}g oats, 1 banana, 200ml low-fat milk, 1 tsp honey"),
+            (0.90, "Poha + Green Tea",           lambda c: f"{max(50,round(c/4.3))}g poha, mixed veggies, 1 cup green tea"),
+            (0.80, "Idli + Sambar",              lambda c: f"{max(2, round(c/95))} idli, 1 cup sambar (no chutney)"),
         ],
         "Lunch": [
-            ("Brown Rice + Dal + Sabzi",   lambda c: f"{max(60, round(c/7))}g brown rice, 1 cup dal, mixed sabzi, salad"),
-            ("Multigrain Roti + Paneer",   lambda c: f"{max(1, round(c/210))} rotis, {max(60, round(c/7))}g paneer bhurji, salad"),
-            ("Quinoa Veggie Bowl",         lambda c: f"{max(60, round(c/6))}g quinoa, chickpeas, cucumber, lemon dressing"),
+            (1.00, "Brown Rice + Dal + Sabzi",   lambda c: f"{max(60,round(c/5.5))}g brown rice, 1 cup dal, mixed sabzi, salad"),
+            (0.90, "Multigrain Roti + Paneer",   lambda c: f"{max(1, round(c/180))} rotis, {max(60,round(c/5.5))}g paneer bhurji, salad"),
+            (0.85, "Quinoa Veggie Bowl",          lambda c: f"{max(55,round(c/5))}g quinoa, chickpeas, cucumber, lemon dressing"),
         ],
         "Dinner": [
-            ("Grilled Chicken + Salad",    lambda c: f"{max(100, round(c/2.3))}g grilled chicken, large salad, lemon"),
-            ("Moong Dal Soup + Roti",      lambda c: f"1 cup moong soup, {max(1, round(c/300))} roti"),
-            ("Vegetable Stir Fry + Tofu",  lambda c: f"mixed veggies, {max(80, round(c/3.5))}g tofu, minimal oil"),
+            (1.00, "Grilled Chicken + Salad",    lambda c: f"{max(100,round(c/1.8))}g grilled chicken, large salad, lemon"),
+            (0.88, "Moong Dal Soup + Roti",      lambda c: f"1 cup moong soup, {max(1,round(c/220))} roti"),
+            (0.80, "Vegetable Stir Fry + Tofu",  lambda c: f"mixed veggies, {max(70,round(c/2.6))}g tofu, minimal oil"),
         ],
         "Snacks": [
-            ("Mixed Nuts",                 lambda c: f"{max(15, round(c/8))}g almonds + walnuts"),
-            ("Greek Yogurt + Berries",     lambda c: f"{max(80, round(c/1.1))}g Greek yogurt, handful berries"),
-            ("Seasonal Fruit",             lambda c: f"1 medium fruit (apple/pear/orange)"),
+            (1.00, "Mixed Nuts",                 lambda c: f"{max(15,round(c/1.3))}g almonds + walnuts"),
+            (0.85, "Greek Yogurt + Berries",     lambda c: f"{max(80,round(c/0.85))}g Greek yogurt, handful berries"),
+            (0.70, "Seasonal Fruit",             lambda c: f"1 medium fruit (apple/pear/orange)"),
         ],
     },
     "Muscle Gain": {
         "Breakfast": [
-            ("Egg Omelette + Toast",       lambda c: f"{max(3, round(c/120))} eggs, {max(2, round(c/240))} multigrain toast"),
-            ("Protein Oats",               lambda c: f"{max(60, round(c/6.8))}g oats, 1 scoop protein powder, banana, 1 tbsp peanut butter"),
-            ("Paneer Paratha + Curd",      lambda c: f"{max(1, round(c/260))} paneer paratha, {max(80, round(c/6.5))}g curd"),
+            (1.00, "Egg Omelette + Toast",       lambda c: f"{max(3, round(c/88))} eggs, {max(2,round(c/176))} multigrain toast"),
+            (0.92, "Protein Oats",               lambda c: f"{max(60,round(c/5.2))}g oats, 1 scoop protein powder, banana, 1 tbsp peanut butter"),
+            (0.85, "Paneer Paratha + Curd",      lambda c: f"{max(1, round(c/198))} paneer paratha, {max(80,round(c/5))}g curd"),
         ],
         "Lunch": [
-            ("Chicken Rice Bowl",          lambda c: f"{max(150, round(c/3.2))}g chicken breast, {max(80, round(c/7))}g rice, veggies"),
-            ("Rajma + Rice + Curd",        lambda c: f"1 cup rajma, {max(80, round(c/7))}g rice, {max(80, round(c/7))}g curd"),
-            ("Egg Fried Rice + Dal",       lambda c: f"{max(2, round(c/290))} eggs fried rice, 1 cup dal"),
+            (1.00, "Chicken Rice Bowl",          lambda c: f"{max(140,round(c/2.4))}g chicken breast, {max(75,round(c/5.5))}g rice, veggies"),
+            (0.92, "Rajma + Rice + Curd",        lambda c: f"1 cup rajma, {max(75,round(c/5.5))}g rice, {max(75,round(c/5.5))}g curd"),
+            (0.88, "Egg Fried Rice + Dal",       lambda c: f"{max(2, round(c/220))} eggs fried rice, 1 cup dal"),
         ],
         "Dinner": [
-            ("Grilled Fish + Sweet Potato",lambda c: f"{max(150, round(c/2.5))}g fish, 1 sweet potato, salad"),
-            ("Paneer Tikka + Roti + Dal",  lambda c: f"{max(100, round(c/5.6))}g paneer tikka, {max(1, round(c/280))} rotis, 1 cup dal"),
-            ("Lentil Soup + Rice + Eggs",  lambda c: f"1 cup lentils, {max(70, round(c/7))}g rice, {max(1, round(c/280))} boiled egg"),
+            (1.00, "Grilled Fish + Sweet Potato",lambda c: f"{max(140,round(c/1.9))}g fish, 1 sweet potato, salad"),
+            (0.92, "Paneer Tikka + Roti + Dal",  lambda c: f"{max(90,round(c/4.3))}g paneer tikka, {max(1,round(c/215))} rotis, 1 cup dal"),
+            (0.88, "Lentil Soup + Rice + Egg",   lambda c: f"1 cup lentils, {max(65,round(c/5.5))}g rice, {max(1,round(c/215))} boiled egg"),
         ],
         "Snacks": [
-            ("Peanut Butter + Banana",     lambda c: f"{max(1, round(c/250))} tbsp peanut butter, 1 banana"),
-            ("Boiled Eggs",                lambda c: f"{max(1, round(c/70))} boiled eggs"),
-            ("Chana Chaat",                lambda c: f"{max(80, round(c/2.3))}g boiled chickpeas, spices, lemon"),
+            (1.00, "Peanut Butter + Banana",     lambda c: f"{max(1, round(c/190))} tbsp peanut butter, 1 banana"),
+            (0.85, "Boiled Eggs",                lambda c: f"{max(1, round(c/54))} boiled eggs"),
+            (0.75, "Chana Chaat",                lambda c: f"{max(70,round(c/1.8))}g boiled chickpeas, spices, lemon"),
         ],
     },
     "Maintain": {
         "Breakfast": [
-            ("Upma + Coconut Chutney",     lambda c: f"{max(60, round(c/5.8))}g upma, small chutney portion"),
-            ("Dosa + Sambar",              lambda c: f"{max(1, round(c/190))} dosas, 1 cup sambar"),
-            ("Muesli + Milk + Fruits",     lambda c: f"{max(40, round(c/7))}g muesli, 200ml milk, mixed fruits"),
+            (1.00, "Upma + Coconut Chutney",     lambda c: f"{max(60,round(c/4.5))}g upma, small chutney portion"),
+            (0.92, "Dosa + Sambar",              lambda c: f"{max(1, round(c/145))} dosas, 1 cup sambar"),
+            (0.85, "Muesli + Milk + Fruits",     lambda c: f"{max(40,round(c/5.5))}g muesli, 200ml milk, mixed fruits"),
         ],
         "Lunch": [
-            ("Dal + Roti + Sabzi + Curd",  lambda c: f"{max(1, round(c/260))} rotis, 1 cup dal, sabzi, {max(80, round(c/6.5))}g curd"),
-            ("Mixed Veg Pulao + Raita",    lambda c: f"{max(80, round(c/6.1))}g pulao, 1 cup raita"),
-            ("Chole + Rice",               lambda c: f"1 cup chole, {max(70, round(c/7))}g rice, onion salad"),
+            (1.00, "Dal + Roti + Sabzi + Curd",  lambda c: f"{max(1, round(c/200))} rotis, 1 cup dal, sabzi, {max(80,round(c/5))}g curd"),
+            (0.92, "Mixed Veg Pulao + Raita",    lambda c: f"{max(75,round(c/4.7))}g pulao, 1 cup raita"),
+            (0.88, "Chole + Rice",               lambda c: f"1 cup chole, {max(65,round(c/5.5))}g rice, onion salad"),
         ],
         "Dinner": [
-            ("Khichdi + Papad",            lambda c: f"{max(80, round(c/5))}g moong dal khichdi, 1 papad"),
-            ("Roti + Sabzi + Soup",        lambda c: f"{max(1, round(c/210))} rotis, sabzi, 1 cup vegetable soup"),
-            ("Grilled Veggies + Cottage Cheese", lambda c: f"mixed grilled veggies, {max(80, round(c/4.7))}g cottage cheese"),
+            (1.00, "Khichdi + Papad",            lambda c: f"{max(80,round(c/3.8))}g moong dal khichdi, 1 papad"),
+            (0.90, "Roti + Sabzi + Soup",        lambda c: f"{max(1, round(c/162))} rotis, sabzi, 1 cup vegetable soup"),
+            (0.83, "Grilled Veggies + Cottage Cheese", lambda c: f"mixed grilled veggies, {max(75,round(c/3.6))}g cottage cheese"),
         ],
         "Snacks": [
-            ("Roasted Makhana",            lambda c: f"{max(20, round(c/3.6))}g makhana, lightly spiced"),
-            ("Fruit Bowl",                 lambda c: f"mixed seasonal fruits"),
-            ("Sprouts Salad",              lambda c: f"1 cup sprouted moong, tomato, lemon"),
+            (1.00, "Roasted Makhana",            lambda c: f"{max(20,round(c/2.8))}g makhana, lightly spiced"),
+            (0.88, "Fruit Bowl",                 lambda c: f"mixed seasonal fruits (~{c}kcal portion)"),
+            (0.75, "Sprouts Salad",              lambda c: f"1 cup sprouted moong, tomato, lemon"),
         ],
     },
 }
 
 def get_meal_recommendations(goal, bmi, age, weight, rda):
-    target_cal  = rda["calories"]
-    fractions   = MEAL_SLOT_FRACTIONS.get(goal, MEAL_SLOT_FRACTIONS["Maintain"])
-    templates   = MEAL_TEMPLATES.get(goal, MEAL_TEMPLATES["Maintain"])
+    target_cal = rda["calories"]
+    fractions  = MEAL_SLOT_FRACTIONS.get(goal, MEAL_SLOT_FRACTIONS["Maintain"])
+    templates  = MEAL_TEMPLATES.get(goal, MEAL_TEMPLATES["Maintain"])
 
     plan = {}
     for slot, frac in fractions.items():
         slot_cal = target_cal * frac
-        meals    = []
-        for name, desc_fn in templates[slot]:
-            desc = desc_fn(slot_cal)
-            kcal = round(slot_cal)           # actual target calories for this slot
-            meals.append((name, desc, kcal))
+        meals = []
+        for mult, name, desc_fn in templates[slot]:
+            opt_cal  = round(slot_cal * mult)          # each option has its own calorie value
+            desc     = desc_fn(opt_cal)                # quantities scale from that option's kcal
+            meals.append((name, desc, opt_cal))
         plan[slot] = meals
 
     tips = []
@@ -680,14 +679,28 @@ if uploaded_files:
     meal_tabs = st.tabs(["🌅 Breakfast", "☀️ Lunch", "🌙 Dinner", "🥜 Snacks"])
     meal_keys = ["Breakfast", "Lunch", "Dinner", "Snacks"]
 
+    option_labels = [
+        ("⭐ Recommended", "#3b82f6"),
+        ("🔽 Lighter",     "#10b981"),
+        ("🔽 Lightest",    "#8b5cf6"),
+    ]
+
     for tab, key in zip(meal_tabs, meal_keys):
         with tab:
             options = meal_plan[key]
             cols = st.columns(len(options))
-            for col, (name, desc, kcal) in zip(cols, options):
+            for i, (col, (name, desc, kcal)) in enumerate(zip(cols, options)):
+                badge_label, badge_color = option_labels[min(i, 2)]
                 with col:
                     st.markdown(f"""
                     <div class='meal-card'>
+                        <div style='margin-bottom:8px;'>
+                            <span style='background:{badge_color}22; color:{badge_color};
+                                border:1px solid {badge_color}55; border-radius:20px;
+                                padding:2px 10px; font-size:11px; font-weight:600;'>
+                                {badge_label}
+                            </span>
+                        </div>
                         <h4>{name}</h4>
                         <p>{desc}</p>
                         <div style='margin-top:10px; color:#fbbf24; font-size:13px; font-weight:600;'>
