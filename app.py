@@ -395,29 +395,37 @@ if uploaded_files:
 
     if os.path.exists(audio):
         os.remove(audio)
-    # =========================================================
-# 🤖 EXTRA FEATURE: AI HEALTH ASSISTANT (ADDED ONLY)
+
+# =========================================================
+# 🤖 NEW FEATURE: AI HEALTH ASSISTANT (IMPROVED)
 # =========================================================
 
 st.markdown("---")
 st.subheader("🤖 AI Health Assistant")
 
-# Load text model separately (no disturbance)
 @st.cache_resource
 def load_text_generator():
     return pipeline("text-generation", model="gpt2")
 
+qa_model = pipeline("question-answering")
 text_generator = load_text_generator()
 
-# User input
-user_query = st.text_input("Ask health/diet/tips questions:")
+user_query = st.text_input("Ask anything about health/diet:")
 
-# AI Agent function (simple like your 7th experiment but adapted)
 def health_ai_agent(task, context=""):
     task = task.lower()
 
+    # Better answering using QA
+    if "what" in task or "why" in task or "how" in task:
+        try:
+            result = qa_model(question=task, context=context)
+            return result['answer']
+        except:
+            pass
+
+    # Fallback generation
     if "summarize" in task:
-        prompt = "Summarize this health report:\n" + context
+        prompt = "Summarize this:\n" + context
     elif "diet" in task:
         prompt = "Give a short healthy diet suggestion."
     elif "tips" in task:
@@ -430,10 +438,9 @@ def health_ai_agent(task, context=""):
     result = text_generator(prompt, max_new_tokens=60)
     return result[0]['generated_text']
 
-# Button action
 if st.button("Ask AI Assistant"):
     try:
-        context_data = analysis  # use your existing analysis safely
+        context_data = analysis
     except:
         context_data = "general health"
 
