@@ -309,96 +309,122 @@ def evaluate_goal(bmi, goal):
         return "✅ Your goal is perfectly suited to your current health.", "green"
 
 # -------------------------
-# MEAL RECOMMENDATIONS
+# MEAL RECOMMENDATIONS (dynamic — scaled to person's calorie target)
 # -------------------------
-MEAL_PLANS = {
+
+# Base meal templates with per-100kcal scaling factors
+# Each entry: (name, description_template, base_kcal, breakfast_frac, lunch_frac, dinner_frac, snack_frac)
+# Fractions define what % of daily calories this meal slot should cover
+
+MEAL_SLOT_FRACTIONS = {
+    "Weight Loss":  {"Breakfast": 0.25, "Lunch": 0.35, "Dinner": 0.28, "Snacks": 0.12},
+    "Muscle Gain":  {"Breakfast": 0.28, "Lunch": 0.35, "Dinner": 0.28, "Snacks": 0.09},
+    "Maintain":     {"Breakfast": 0.25, "Lunch": 0.35, "Dinner": 0.30, "Snacks": 0.10},
+}
+
+# Template meals — description includes {qty} placeholder scaled dynamically
+MEAL_TEMPLATES = {
     "Weight Loss": {
         "Breakfast": [
-            ("Oats + Banana Smoothie", "60g oats, 1 banana, 200ml low-fat milk, 1 tsp honey", 320),
-            ("Poha + Green Tea", "1 cup poha, veggies, 1 cup green tea", 280),
-            ("Idli + Sambar", "3 idli, 1 cup sambar (no coconut chutney)", 260),
+            ("Oats + Banana Smoothie",     lambda c: f"{max(40, round(c/8))}g oats, 1 banana, 200ml low-fat milk, 1 tsp honey"),
+            ("Poha + Green Tea",           lambda c: f"{max(60, round(c/5))}g poha, mixed veggies, 1 cup green tea"),
+            ("Idli + Sambar",              lambda c: f"{max(2, round(c/130))} idli, 1 cup sambar (no chutney)"),
         ],
         "Lunch": [
-            ("Brown Rice + Dal + Sabzi", "1 cup brown rice, 1 cup dal, mixed sabzi", 450),
-            ("Multigrain Roti + Paneer Bhurji", "2 rotis, 100g paneer bhurji, salad", 420),
-            ("Quinoa Salad", "1 cup quinoa, chickpeas, cucumber, lemon dressing", 380),
+            ("Brown Rice + Dal + Sabzi",   lambda c: f"{max(60, round(c/7))}g brown rice, 1 cup dal, mixed sabzi, salad"),
+            ("Multigrain Roti + Paneer",   lambda c: f"{max(1, round(c/210))} rotis, {max(60, round(c/7))}g paneer bhurji, salad"),
+            ("Quinoa Veggie Bowl",         lambda c: f"{max(60, round(c/6))}g quinoa, chickpeas, cucumber, lemon dressing"),
         ],
         "Dinner": [
-            ("Grilled Chicken + Salad", "150g grilled chicken, large salad, lemon dressing", 350),
-            ("Moong Dal Soup + Roti", "1 cup moong soup, 1 roti", 300),
-            ("Vegetable Stir Fry + Tofu", "Mixed veggies, 100g tofu, minimal oil", 280),
+            ("Grilled Chicken + Salad",    lambda c: f"{max(100, round(c/2.3))}g grilled chicken, large salad, lemon"),
+            ("Moong Dal Soup + Roti",      lambda c: f"1 cup moong soup, {max(1, round(c/300))} roti"),
+            ("Vegetable Stir Fry + Tofu",  lambda c: f"mixed veggies, {max(80, round(c/3.5))}g tofu, minimal oil"),
         ],
         "Snacks": [
-            ("Mixed Nuts (small handful)", "20g almonds + walnuts", 130),
-            ("Greek Yogurt + Berries", "100g Greek yogurt, handful berries", 110),
-            ("Fruit (apple/pear)", "1 medium fruit", 80),
-        ]
+            ("Mixed Nuts",                 lambda c: f"{max(15, round(c/8))}g almonds + walnuts"),
+            ("Greek Yogurt + Berries",     lambda c: f"{max(80, round(c/1.1))}g Greek yogurt, handful berries"),
+            ("Seasonal Fruit",             lambda c: f"1 medium fruit (apple/pear/orange)"),
+        ],
     },
     "Muscle Gain": {
         "Breakfast": [
-            ("Egg White Omelette + Toast", "4 egg whites, 2 whole eggs, 2 multigrain toast", 480),
-            ("Protein Oats", "80g oats, 1 scoop protein powder, banana, peanut butter", 550),
-            ("Paneer Paratha + Curd", "2 paneer parathas (ghee), 1 cup curd", 520),
+            ("Egg Omelette + Toast",       lambda c: f"{max(3, round(c/120))} eggs, {max(2, round(c/240))} multigrain toast"),
+            ("Protein Oats",               lambda c: f"{max(60, round(c/6.8))}g oats, 1 scoop protein powder, banana, 1 tbsp peanut butter"),
+            ("Paneer Paratha + Curd",      lambda c: f"{max(1, round(c/260))} paneer paratha, {max(80, round(c/6.5))}g curd"),
         ],
         "Lunch": [
-            ("Chicken Rice Bowl", "200g chicken breast, 1.5 cups rice, veggies", 650),
-            ("Rajma + Rice + Curd", "1.5 cups rajma, 1.5 cups rice, 1 cup curd", 620),
-            ("Egg Fried Rice + Dal", "2 eggs fried rice, 1 cup dal", 580),
+            ("Chicken Rice Bowl",          lambda c: f"{max(150, round(c/3.2))}g chicken breast, {max(80, round(c/7))}g rice, veggies"),
+            ("Rajma + Rice + Curd",        lambda c: f"1 cup rajma, {max(80, round(c/7))}g rice, {max(80, round(c/7))}g curd"),
+            ("Egg Fried Rice + Dal",       lambda c: f"{max(2, round(c/290))} eggs fried rice, 1 cup dal"),
         ],
         "Dinner": [
-            ("Grilled Fish + Sweet Potato", "200g fish, 1 sweet potato, salad", 500),
-            ("Paneer Tikka + Roti", "150g paneer tikka, 2 rotis, dal", 560),
-            ("Lentil Soup + Brown Rice + Egg", "1 cup lentils, 1 cup rice, 2 boiled eggs", 540),
+            ("Grilled Fish + Sweet Potato",lambda c: f"{max(150, round(c/2.5))}g fish, 1 sweet potato, salad"),
+            ("Paneer Tikka + Roti + Dal",  lambda c: f"{max(100, round(c/5.6))}g paneer tikka, {max(1, round(c/280))} rotis, 1 cup dal"),
+            ("Lentil Soup + Rice + Eggs",  lambda c: f"1 cup lentils, {max(70, round(c/7))}g rice, {max(1, round(c/280))} boiled egg"),
         ],
         "Snacks": [
-            ("Peanut Butter + Banana", "2 tbsp peanut butter, 1 large banana", 250),
-            ("Boiled Eggs (2)", "2 whole boiled eggs", 140),
-            ("Chana Chaat", "1 cup boiled chickpeas, spices, lemon", 190),
-        ]
+            ("Peanut Butter + Banana",     lambda c: f"{max(1, round(c/250))} tbsp peanut butter, 1 banana"),
+            ("Boiled Eggs",                lambda c: f"{max(1, round(c/70))} boiled eggs"),
+            ("Chana Chaat",                lambda c: f"{max(80, round(c/2.3))}g boiled chickpeas, spices, lemon"),
+        ],
     },
     "Maintain": {
         "Breakfast": [
-            ("Upma + Coconut Chutney", "1 cup upma, small chutney portion", 350),
-            ("Dosa + Sambar", "2 dosas, 1 cup sambar", 380),
-            ("Muesli + Milk + Fruits", "50g muesli, 200ml milk, mixed fruits", 360),
+            ("Upma + Coconut Chutney",     lambda c: f"{max(60, round(c/5.8))}g upma, small chutney portion"),
+            ("Dosa + Sambar",              lambda c: f"{max(1, round(c/190))} dosas, 1 cup sambar"),
+            ("Muesli + Milk + Fruits",     lambda c: f"{max(40, round(c/7))}g muesli, 200ml milk, mixed fruits"),
         ],
         "Lunch": [
-            ("Dal + Roti + Sabzi + Curd", "2 rotis, 1 cup dal, sabzi, 1 cup curd", 520),
-            ("Mixed Veg Pulao + Raita", "1.5 cups pulao, 1 cup raita", 490),
-            ("Chole + Rice", "1 cup chole, 1 cup rice, onion salad", 510),
+            ("Dal + Roti + Sabzi + Curd",  lambda c: f"{max(1, round(c/260))} rotis, 1 cup dal, sabzi, {max(80, round(c/6.5))}g curd"),
+            ("Mixed Veg Pulao + Raita",    lambda c: f"{max(80, round(c/6.1))}g pulao, 1 cup raita"),
+            ("Chole + Rice",               lambda c: f"1 cup chole, {max(70, round(c/7))}g rice, onion salad"),
         ],
         "Dinner": [
-            ("Khichdi + Papad", "1.5 cups moong dal khichdi, 1 papad", 400),
-            ("Roti + Sabzi + Soup", "2 rotis, sabzi, 1 cup vegetable soup", 420),
-            ("Grilled Veggies + Cottage Cheese", "Mixed grilled veggies, 100g cottage cheese", 380),
+            ("Khichdi + Papad",            lambda c: f"{max(80, round(c/5))}g moong dal khichdi, 1 papad"),
+            ("Roti + Sabzi + Soup",        lambda c: f"{max(1, round(c/210))} rotis, sabzi, 1 cup vegetable soup"),
+            ("Grilled Veggies + Cottage Cheese", lambda c: f"mixed grilled veggies, {max(80, round(c/4.7))}g cottage cheese"),
         ],
         "Snacks": [
-            ("Roasted Makhana", "30g makhana, lightly spiced", 110),
-            ("Fruit Bowl", "Mixed seasonal fruits", 120),
-            ("Sprouts Salad", "1 cup sprouted moong, tomato, lemon", 130),
-        ]
-    }
+            ("Roasted Makhana",            lambda c: f"{max(20, round(c/3.6))}g makhana, lightly spiced"),
+            ("Fruit Bowl",                 lambda c: f"mixed seasonal fruits"),
+            ("Sprouts Salad",              lambda c: f"1 cup sprouted moong, tomato, lemon"),
+        ],
+    },
 }
 
 def get_meal_recommendations(goal, bmi, age, weight, rda):
-    plan = MEAL_PLANS.get(goal, MEAL_PLANS["Maintain"])
-    tips = []
+    target_cal  = rda["calories"]
+    fractions   = MEAL_SLOT_FRACTIONS.get(goal, MEAL_SLOT_FRACTIONS["Maintain"])
+    templates   = MEAL_TEMPLATES.get(goal, MEAL_TEMPLATES["Maintain"])
 
+    plan = {}
+    for slot, frac in fractions.items():
+        slot_cal = target_cal * frac
+        meals    = []
+        for name, desc_fn in templates[slot]:
+            desc = desc_fn(slot_cal)
+            kcal = round(slot_cal)           # actual target calories for this slot
+            meals.append((name, desc, kcal))
+        plan[slot] = meals
+
+    tips = []
     if bmi > 27:
-        tips.append("🔥 Aim for a 300-500 kcal daily deficit. Avoid sugary drinks and deep-fried foods.")
+        deficit = round(target_cal * 0.15)
+        tips.append(f"🔥 Your target is {target_cal} kcal/day — a ~{deficit} kcal deficit from maintenance. Avoid sugary drinks and fried foods.")
     elif bmi < 18.5:
-        tips.append("📈 Aim for a 300-400 kcal daily surplus. Include calorie-dense whole foods.")
+        surplus = round(target_cal * 0.12)
+        tips.append(f"📈 Your target is {target_cal} kcal/day — includes a ~{surplus} kcal surplus for healthy weight gain.")
     else:
-        tips.append("⚖️ Maintain consistent meal timing and balanced macros throughout the day.")
+        tips.append(f"⚖️ Your daily calorie target is {target_cal} kcal. Meal portions below are scaled to fit this.")
 
     if goal == "Muscle Gain":
-        tips.append(f"💪 Target {round(1.6*weight)}–{round(2.0*weight)}g protein/day for optimal muscle synthesis.")
+        tips.append(f"💪 Target {round(1.6*weight)}–{round(2.0*weight)}g protein/day for your body weight ({weight} kg).")
         tips.append("🏋️ Consume a protein-rich meal within 30 min post-workout.")
     elif goal == "Weight Loss":
         tips.append("🥗 Prioritize high-volume, low-calorie foods (veggies, soups, salads) to stay full.")
-        tips.append("🚰 Drink 2.5–3L water daily. Hydration reduces false hunger signals.")
+        tips.append("🚰 Drink 2.5–3L water daily — hydration reduces false hunger signals.")
     else:
-        tips.append("🕐 Eat every 3–4 hours to maintain stable blood sugar and energy levels.")
+        tips.append("🕐 Eat every 3–4 hours to maintain stable blood sugar and energy.")
 
     if age > 40:
         tips.append("❤️ Prioritize calcium-rich foods (dairy/ragi) and limit sodium for heart health.")
@@ -669,28 +695,38 @@ if uploaded_files:
                         </div>
                     </div>""", unsafe_allow_html=True)
 
-    # Daily calorie budget bar
+    # Daily calorie budget bar — sum of all slot targets = rda calories
     st.markdown("<br>", unsafe_allow_html=True)
-    day_meals   = [m[2] for m in meal_plan["Breakfast"]]
-    avg_day_cal = (sum(meal_plan["Breakfast"][0][2:3]) +
-                   sum(meal_plan["Lunch"][0][2:3]) +
-                   sum(meal_plan["Dinner"][0][2:3]) +
-                   sum(meal_plan["Snacks"][0][2:3]))[0] if False else \
-                  (meal_plan["Breakfast"][0][2] + meal_plan["Lunch"][0][2] +
-                   meal_plan["Dinner"][0][2] + meal_plan["Snacks"][0][2])
+    fracs       = MEAL_SLOT_FRACTIONS.get(goal, MEAL_SLOT_FRACTIONS["Maintain"])
+    day_total   = sum(round(rda["calories"] * f) for f in fracs.values())
+    slot_labels = list(fracs.keys())
+    slot_cals   = [round(rda["calories"] * f) for f in fracs.values()]
+    used_pct    = min(day_total / max(rda["calories"], 1) * 100, 100)
 
-    used_pct = min(avg_day_cal / max(rda["calories"], 1) * 100, 100)
+    slot_html = "".join([
+        f"<div style='text-align:center'>"
+        f"<div style='color:#7b8cad; font-size:11px;'>{s}</div>"
+        f"<div style='color:#e2e8f0; font-size:14px; font-weight:600;'>{c} kcal</div>"
+        f"</div>"
+        for s, c in zip(slot_labels, slot_cals)
+    ])
+
     st.markdown(f"""
     <div style='background:#1c2333; border:1px solid #2a3550; border-radius:10px; padding:16px 20px;'>
-        <div style='display:flex; justify-content:space-between; margin-bottom:8px;'>
-            <span style='color:#e2e8f0; font-size:14px;'>📅 Sample Day 1 Total</span>
-            <span style='color:#fbbf24; font-size:14px; font-weight:600;'>{avg_day_cal} / {rda["calories"]} kcal</span>
+        <div style='display:flex; justify-content:space-between; margin-bottom:10px; align-items:center;'>
+            <span style='color:#e2e8f0; font-size:14px; font-weight:600;'>📅 Daily Calorie Plan — {weight}kg · {goal}</span>
+            <span style='color:#fbbf24; font-size:15px; font-weight:700;'>{day_total} / {rda["calories"]} kcal</span>
+        </div>
+        <div style='display:flex; justify-content:space-around; margin-bottom:12px;'>
+            {slot_html}
         </div>
         <div style='background:#2a3550; border-radius:20px; height:10px;'>
-            <div style='background:linear-gradient(90deg,#3b82f6,#10b981); width:{used_pct}%;
+            <div style='background:linear-gradient(90deg,#3b82f6,#10b981); width:{used_pct:.1f}%;
                         height:10px; border-radius:20px;'></div>
         </div>
-        <div style='color:#7b8cad; font-size:12px; margin-top:6px;'>{round(used_pct)}% of daily calorie target</div>
+        <div style='color:#7b8cad; font-size:12px; margin-top:6px;'>
+            Meal portions shown above are scaled to your {rda["calories"]} kcal/day target
+        </div>
     </div>""", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
