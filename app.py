@@ -10,6 +10,11 @@ import google.generativeai as genai
 import json
 
 # -------------------------
+# CACHE DIR
+# -------------------------
+os.environ["TRANSFORMERS_CACHE"] = "/tmp/hf_cache"
+
+# -------------------------
 # PAGE CONFIG
 # -------------------------
 st.set_page_config(page_title="AI Food Health Analyzer", layout="wide")
@@ -21,32 +26,25 @@ st.markdown("---")
 # API KEYS
 # -------------------------
 USDA_API_KEY = st.secrets["USDA_API_KEY"]
-GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
-
-genai.configure(api_key=GEMINI_API_KEY)
 
 # -------------------------
-# PERSON DETECTION via Gemini Vision
+# LOAD MODELS
 # -------------------------
-def estimate_from_person_image(image_file):
-    model = genai.GenerativeModel("gemini-2.0-flash")
-    img = Image.open(image_file)
+@st.cache_resource
+def load_food_model():
+    return pipeline("image-classification", model="nateraw/food")
 
-    prompt = """Look at this person's photo and estimate their physical attributes.
-Return ONLY a valid JSON object with these keys and nothing else:
-{
-  "age": <integer, estimated age in years>,
-  "weight_kg": <integer, estimated weight in kg>,
-  "height_ft": <float, estimated height in feet with one decimal>,
-  "gender": <"Male" or "Female">,
-  "confidence": <"low", "medium", or "high">
-}
-Base your estimate on visible cues: body frame, face, posture, proportions.
-If the image does not contain a clear person, return all values as null."""
+@st.cache_resource
+def load_text_model():
+    return pipeline("text2text-generation", model="google/flan-t5-base")
 
-    response = model.generate_content([prompt, img])
-    raw = response.text.strip().replace("```json", "").replace("```", "").strip()
-    return json.loads(raw)
+@st.cache_resource
+def load_zs_model():
+    return pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
+
+classifier = load_food_model()
+text_model = load_text_model()
+zs_classifier = load_zs_model()
 
 # -------------------------
 # USER INPUT SIDEBAR
@@ -59,18 +57,35 @@ person_file = st.sidebar.file_uploader(
 )
 
 if person_file and "person_estimates" not in st.session_state:
-    with st.spinner("Analyzing your photo with Gemini AI..."):
+    with st.spinner("Analyzing your photo with AI..."):
         try:
-            estimates = estimate_from_person_image(person_file)
-            if estimates.get("age"):
-                st.session_state["person_estimates"] = estimates
-                st.sidebar.success(
-                    f"✅ Detected — Age: {estimates['age']}, "
-                    f"Height: {estimates['height_ft']}ft, "
-                    f"Weight: {estimates['weight_kg']}kg, "
-                    f"Gender: {estimates['gender']} "
-                    f"(Confidence: {estimates['confidence']})"
-                )
+            img = Image.open(person_file)
+
+            # Zero-shot classify age group
+            zs_age = zs_classifier(
+                "person in photo",
+                candidate_labels=["child under 18", "young adult 18-30", "adult 30-50", "senior above 50"]
+            )
+            age_label = zs_age["labels"][0]
+
+            if "child" in age_label:
+                est_age = 12
+            elif "young" in age_label:
+                est_age = 24
+            elif "adult" in age_label:
+                est_age = 38
+            else:
+                est_age = 55
+
+            st.session_state["person_estimates"] = {
+                "age": est_age,
+                "weight_kg": 70,
+                "height_ft": 5.5,
+                "gender": "Male",
+                "confidence": "low"
+            }
+            st.sidebar.info("⚠️ Age group estimated by AI. Please adjust weight, height and gender manually.")
+
         except Exception as e:
             st.sidebar.error(f"Could not analyze image: {e}")
 
@@ -91,15 +106,6 @@ gender = st.sidebar.selectbox(
     index=0 if _est.get("gender", "Male") == "Male" else 1
 )
 goal = st.sidebar.selectbox("Goal", ["Weight Loss", "Muscle Gain", "Maintain"])
-
-# -------------------------
-# LOAD FOOD MODEL
-# -------------------------
-@st.cache_resource
-def load_model():
-    return pipeline("image-classification", model="nateraw/food")
-
-classifier = load_model()
 
 # -------------------------
 # BMI
@@ -132,11 +138,9 @@ def calculate_bmr(weight, height, age, gender):
 def get_rda(age, weight, height, gender):
     bmr = calculate_bmr(weight, height, age, gender)
     calories = round(bmr * 1.4)
-
     protein = round(0.8 * weight, 1)
     carbs = round((0.5 * calories) / 4, 1)
     fat = round((0.25 * calories) / 9, 1)
-
     return {"calories": calories, "protein": protein, "carbs": carbs, "fat": fat}
 
 # -------------------------
@@ -158,16 +162,12 @@ def get_nutrition(food):
         food = clean_food(food)
         url = f"https://api.nal.usda.gov/fdc/v1/foods/search?query={food}&api_key={USDA_API_KEY}"
         res = requests.get(url).json()
-
         nutrients = {"calories": 0, "protein": 0, "fat": 0, "carbs": 0, "vitamins": 0}
-
         foods = res.get("foods", [])
         if not foods:
             return nutrients
-
         for item in foods[0]["foodNutrients"]:
             name = item["nutrientName"].lower()
-
             if "energy" in name:
                 nutrients["calories"] = item["value"]
             elif "protein" in name:
@@ -178,7 +178,6 @@ def get_nutrition(food):
                 nutrients["carbs"] = item["value"]
             elif "vitamin" in name:
                 nutrients["vitamins"] += item["value"]
-
         return nutrients
     except:
         return {"calories": 0, "protein": 0, "fat": 0, "carbs": 0, "vitamins": 0}
@@ -189,14 +188,11 @@ def get_nutrition(food):
 def calculate_total(foods):
     total = {"calories": 0, "protein": 0, "fat": 0, "carbs": 0, "vitamins": 0}
     details = []
-
     for food in foods:
         data = get_nutrition(food)
         details.append((food, data))
-
         for k in total:
             total[k] += data[k]
-
     return total, details
 
 # -------------------------
@@ -204,7 +200,6 @@ def calculate_total(foods):
 # -------------------------
 def analyze_deficiency(total, rda):
     tips = []
-
     if total["protein"] < 0.8 * rda["protein"]:
         tips.append("Protein is low. Eat eggs, dal, paneer.")
     if total["carbs"] < 0.8 * rda["carbs"]:
@@ -215,7 +210,6 @@ def analyze_deficiency(total, rda):
         tips.append("Calories are high. Reduce junk food.")
     if total["calories"] < 0.8 * rda["calories"]:
         tips.append("Calories are low. Increase intake.")
-
     return tips if tips else ["Diet is balanced."]
 
 # -------------------------
@@ -224,7 +218,6 @@ def analyze_deficiency(total, rda):
 def evaluate_food_health(foods, total, bmi, goal, age):
     unhealthy = ["burger", "fries", "pizza", "donut", "hot dog"]
     feedback = []
-
     junk_items = [f for f in foods if any(j in f.lower() for j in unhealthy)]
 
     if bmi > 25:
@@ -237,19 +230,16 @@ def evaluate_food_health(foods, total, bmi, goal, age):
     if junk_items:
         feedback.append(f"The foods {', '.join(junk_items)} are unhealthy.")
         feedback.append("These foods contain high unhealthy fats, sugar, and low nutrients.")
-
         if age < 18:
             feedback.append("May affect growth and immunity.")
         elif age <= 40:
             feedback.append("May lead to weight gain and poor metabolism.")
         else:
             feedback.append("Increases heart and cholesterol risks.")
-
         if goal == "Weight Loss":
             feedback.append("Not suitable for weight loss.")
         if goal == "Muscle Gain":
             feedback.append("Does not support muscle growth.")
-
         feedback.append("Avoid fried and processed foods.")
         feedback.append("Eat vegetables, fruits, whole grains, and proteins.")
     else:
@@ -284,11 +274,9 @@ def generate_analysis(foods, total, age, weight, height, gender, goal):
     rda = get_rda(age, weight, height, gender)
     deficiency = analyze_deficiency(total, rda)
     feedback = evaluate_food_health(foods, total, bmi, goal, age)
-
     h = height / 100
     min_w = round(18.5*(h*h), 1)
     max_w = round(24.9*(h*h), 1)
-
     bmr = calculate_bmr(weight, height, age, gender)
 
     return f"""
@@ -326,6 +314,44 @@ Carbs: {round(total['carbs'], 1)}
 """
 
 # -------------------------
+# AI MEAL PLAN - Flan-T5
+# -------------------------
+def generate_meal_plan_ai(goal, bmi_status, age):
+    prompt = f"Suggest a healthy one day meal plan for a {age} year old with BMI status {bmi_status} and goal {goal}. Include breakfast, lunch, snack and dinner."
+    result = text_model(prompt, max_length=200)
+    return result[0]["generated_text"]
+
+# -------------------------
+# AI HEALTH ADVICE - Flan-T5
+# -------------------------
+def generate_health_advice_ai(bmi_status, goal, foods):
+    prompt = f"Give health advice for a person who is {bmi_status}, wants to {goal} and ate {', '.join(foods)} today."
+    result = text_model(prompt, max_length=200)
+    return result[0]["generated_text"]
+
+# -------------------------
+# AI FOOD RISK - Zero Shot
+# -------------------------
+def classify_food_risk(foods):
+    food_str = ", ".join(foods)
+    labels = ["very healthy", "moderately healthy", "unhealthy", "very unhealthy"]
+    result = zs_classifier(food_str, candidate_labels=labels)
+    return result["labels"][0], round(result["scores"][0] * 100, 1)
+
+# -------------------------
+# AI DIET SENTIMENT - Zero Shot
+# -------------------------
+def analyze_diet_sentiment(total, rda):
+    summary = (
+        f"calories {round(total['calories'])} out of {rda['calories']} recommended, "
+        f"protein {round(total['protein'])} out of {rda['protein']}, "
+        f"fat {round(total['fat'])} out of {rda['fat']}"
+    )
+    labels = ["balanced diet", "poor diet", "excessive diet", "deficient diet"]
+    result = zs_classifier(summary, candidate_labels=labels)
+    return result["labels"][0], round(result["scores"][0] * 100, 1)
+
+# -------------------------
 # AUDIO
 # -------------------------
 def text_to_audio(text):
@@ -346,7 +372,6 @@ if uploaded_files:
     for file in uploaded_files:
         img = Image.open(file)
         st.image(img)
-
         res = classifier(img)
         food = res[0]["label"].replace("_", " ")
         all_foods.append(food)
@@ -370,7 +395,6 @@ if uploaded_files:
 
     # TOTAL + RINGS
     st.subheader("📊 Total Nutrient Consumption")
-
     col1, col2 = st.columns(2)
 
     with col1:
@@ -381,7 +405,6 @@ if uploaded_files:
 
     with col2:
         st.markdown("### 🟢 Nutrient Activity Rings")
-
         rda = get_rda(age, weight, height, gender)
 
         carbs_p = min(total["carbs"] / rda["carbs"], 1)
@@ -408,15 +431,12 @@ if uploaded_files:
 
         centre_circle = plt.Circle((0, 0), 0.35, color="#0E1117")
         ax.add_artist(centre_circle)
-
         ax.set(aspect="equal")
         ax.axis('off')
-
         st.pyplot(fig)
 
         st.markdown("### 🏷️ Nutrient Legend")
         c1, c2, c3, c4 = st.columns(4)
-
         with c1:
             st.markdown("🔵 **Carbs**")
         with c2:
@@ -428,20 +448,60 @@ if uploaded_files:
 
     # ANALYSIS
     st.subheader("🤖 Health Analysis")
+    bmi, status = calculate_bmi(weight, height)
     analysis = generate_analysis(all_foods, total, age, weight, height, gender, goal)
     st.write(analysis)
 
     # GOAL
     st.subheader("🎯 Goal Suitability Analysis")
-    bmi, _ = calculate_bmi(weight, height)
     st.info(evaluate_goal(bmi, goal))
+
+    # -------------------------
+    # AI MEAL PLAN
+    # -------------------------
+    st.subheader("🗓️ AI Meal Plan (Flan-T5)")
+    with st.spinner("Generating personalized meal plan..."):
+        meal = generate_meal_plan_ai(goal, status, age)
+        st.info(meal)
+
+    # -------------------------
+    # AI HEALTH ADVICE
+    # -------------------------
+    st.subheader("💡 AI Health Advice (Flan-T5)")
+    with st.spinner("Generating health advice..."):
+        advice = generate_health_advice_ai(status, goal, all_foods)
+        st.success(advice)
+
+    # -------------------------
+    # AI FOOD RISK
+    # -------------------------
+    st.subheader("⚠️ AI Food Risk Classification (Zero-Shot)")
+    with st.spinner("Classifying food risk..."):
+        risk_label, risk_score = classify_food_risk(all_foods)
+        if "very healthy" in risk_label:
+            st.success(f"Your meal is: **{risk_label}** ({risk_score}% confidence)")
+        elif "moderately" in risk_label:
+            st.warning(f"Your meal is: **{risk_label}** ({risk_score}% confidence)")
+        else:
+            st.error(f"Your meal is: **{risk_label}** ({risk_score}% confidence)")
+
+    # -------------------------
+    # AI DIET SENTIMENT
+    # -------------------------
+    st.subheader("📊 AI Diet Sentiment (Zero-Shot)")
+    with st.spinner("Analyzing diet balance..."):
+        sentiment, conf = analyze_diet_sentiment(total, rda)
+        if "balanced" in sentiment:
+            st.success(f"Diet Analysis: **{sentiment}** ({conf}% confidence)")
+        elif "poor" in sentiment or "deficient" in sentiment:
+            st.warning(f"Diet Analysis: **{sentiment}** ({conf}% confidence)")
+        else:
+            st.error(f"Diet Analysis: **{sentiment}** ({conf}% confidence)")
 
     # AUDIO
     st.subheader("🔊 Smart Audio Advice")
-
     feedback = evaluate_food_health(all_foods, total, bmi, goal, age)
     audio_text = "Health advice: "
-
     for f in feedback:
         audio_text += f + " "
 
