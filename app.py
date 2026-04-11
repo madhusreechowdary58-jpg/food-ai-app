@@ -29,7 +29,7 @@ genai.configure(api_key=GEMINI_API_KEY)
 # PERSON DETECTION via Gemini Vision
 # -------------------------
 def estimate_from_person_image(image_file):
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-2.0-flash")
     img = Image.open(image_file)
 
     prompt = """Look at this person's photo and estimate their physical attributes.
