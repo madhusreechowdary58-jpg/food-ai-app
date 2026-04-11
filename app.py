@@ -6,6 +6,9 @@ import tempfile
 import os
 import requests
 import matplotlib.pyplot as plt
+import anthropic
+import base64
+import json
 
 # -------------------------
 # PAGE CONFIG
@@ -16,32 +19,108 @@ st.title("🍔 GenAI Food & Health Analyzer")
 st.markdown("---")
 
 # -------------------------
-# USER INPUT
+# API KEYS
+# -------------------------
+USDA_API_KEY = st.secrets["USDA_API_KEY"]
+ANTHROPIC_API_KEY = st.secrets["ANTHROPIC_API_KEY"]
+
+# -------------------------
+# PERSON DETECTION via Claude Vision
+# -------------------------
+def estimate_from_person_image(image_file):
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+    image_bytes = image_file.read()
+    b64_image = base64.standard_b64encode(image_bytes).decode("utf-8")
+    image_file.seek(0)
+
+    prompt = """Look at this person's photo and estimate their physical attributes.
+Return ONLY a valid JSON object with these keys and nothing else:
+{
+  "age": <integer, estimated age in years>,
+  "weight_kg": <integer, estimated weight in kg>,
+  "height_ft": <float, estimated height in feet with one decimal>,
+  "gender": <"Male" or "Female">,
+  "confidence": <"low", "medium", or "high">
+}
+Base your estimate on visible cues: body frame, face, posture, proportions.
+If the image does not contain a clear person, return all values as null."""
+
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=256,
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/jpeg",
+                        "data": b64_image
+                    }
+                },
+                {"type": "text", "text": prompt}
+            ]
+        }]
+    )
+
+    raw = response.content[0].text.strip()
+    raw = raw.replace("```json", "").replace("```", "").strip()
+    return json.loads(raw)
+
+# -------------------------
+# USER INPUT SIDEBAR
 # -------------------------
 st.sidebar.header("👤 User Profile")
 
-age = st.sidebar.number_input("Age", 5, 80)
-weight = st.sidebar.number_input("Weight (kg)", 20, 150)
+st.sidebar.markdown("### 📷 Auto-detect from Photo (optional)")
+person_file = st.sidebar.file_uploader(
+    "Upload your photo", type=["jpg", "jpeg", "png"], key="person_img"
+)
 
-height_ft = st.sidebar.number_input("Height (feet)", 1.0, 7.0, step=0.1)
+if person_file and "person_estimates" not in st.session_state:
+    with st.spinner("Analyzing your photo with AI..."):
+        try:
+            estimates = estimate_from_person_image(person_file)
+            if estimates.get("age"):
+                st.session_state["person_estimates"] = estimates
+                st.sidebar.success(
+                    f"✅ Detected — Age: {estimates['age']}, "
+                    f"Height: {estimates['height_ft']}ft, "
+                    f"Weight: {estimates['weight_kg']}kg, "
+                    f"Gender: {estimates['gender']} "
+                    f"(Confidence: {estimates['confidence']})"
+                )
+        except Exception as e:
+            st.sidebar.error(f"Could not analyze image: {e}")
+
+if st.sidebar.button("🔄 Clear detected values"):
+    st.session_state.pop("person_estimates", None)
+
+_est = st.session_state.get("person_estimates", {})
+
+age = st.sidebar.number_input("Age", 5, 80, value=int(_est.get("age", 25)))
+weight = st.sidebar.number_input("Weight (kg)", 20, 150, value=int(_est.get("weight_kg", 70)))
+height_ft = st.sidebar.number_input(
+    "Height (feet)", 1.0, 7.0,
+    value=float(_est.get("height_ft", 5.5)), step=0.1
+)
 height = round(height_ft * 30.48)
-
-gender = st.sidebar.selectbox("Gender", ["Male", "Female"])
+gender = st.sidebar.selectbox(
+    "Gender", ["Male", "Female"],
+    index=0 if _est.get("gender", "Male") == "Male" else 1
+)
 goal = st.sidebar.selectbox("Goal", ["Weight Loss", "Muscle Gain", "Maintain"])
 
 # -------------------------
-# LOAD MODEL
+# LOAD FOOD MODEL
 # -------------------------
 @st.cache_resource
 def load_model():
     return pipeline("image-classification", model="nateraw/food")
 
 classifier = load_model()
-
-# -------------------------
-# API KEY
-# -------------------------
-USDA_API_KEY = st.secrets["USDA_API_KEY"]
 
 # -------------------------
 # BMI
@@ -164,7 +243,6 @@ def analyze_deficiency(total, rda):
 # FOOD SUITABILITY
 # -------------------------
 def evaluate_food_health(foods, total, bmi, goal, age):
-
     unhealthy = ["burger", "fries", "pizza", "donut", "hot dog"]
     feedback = []
 
@@ -195,7 +273,6 @@ def evaluate_food_health(foods, total, bmi, goal, age):
 
         feedback.append("Avoid fried and processed foods.")
         feedback.append("Eat vegetables, fruits, whole grains, and proteins.")
-
     else:
         feedback.append("Foods are healthy in moderation.")
 
@@ -205,13 +282,11 @@ def evaluate_food_health(foods, total, bmi, goal, age):
 # GOAL SUITABILITY
 # -------------------------
 def evaluate_goal(bmi, goal):
-
     if bmi < 18.5:
         if goal == "Weight Loss":
             return "❌ You are underweight. Weight loss is not recommended."
         else:
             return "✅ Your goal is appropriate."
-
     elif bmi > 25:
         if goal == "Muscle Gain":
             return "⚠️ You are overweight. Focus on fat loss first."
@@ -219,7 +294,6 @@ def evaluate_goal(bmi, goal):
             return "⚠️ Consider weight loss instead."
         else:
             return "✅ Your goal aligns with your health."
-
     else:
         return "✅ Your goal is suitable."
 
@@ -227,15 +301,14 @@ def evaluate_goal(bmi, goal):
 # ANALYSIS
 # -------------------------
 def generate_analysis(foods, total, age, weight, height, gender, goal):
-
     bmi, status = calculate_bmi(weight, height)
     rda = get_rda(age, weight, height, gender)
     deficiency = analyze_deficiency(total, rda)
     feedback = evaluate_food_health(foods, total, bmi, goal, age)
 
     h = height / 100
-    min_w = round(18.5*(h*h),1)
-    max_w = round(24.9*(h*h),1)
+    min_w = round(18.5*(h*h), 1)
+    max_w = round(24.9*(h*h), 1)
 
     bmr = calculate_bmr(weight, height, age, gender)
 
@@ -245,7 +318,7 @@ def generate_analysis(foods, total, age, weight, height, gender, goal):
 👤 Age: {age}  
 ⚧ Gender: {gender}
 
-📏 Height: {round(height/30.48,1)} ft
+📏 Height: {round(height/30.48, 1)} ft
 
 ⚖️ BMI: {bmi} → {status}  
 Ideal Weight: {min_w}-{max_w} kg
@@ -261,10 +334,10 @@ Carbs: {rda['carbs']}
 🍔 Foods: {foods}
 
 📊 Your Intake:
-Calories: {round(total['calories'],1)}
-Protein: {round(total['protein'],1)}
-Fat: {round(total['fat'],1)}
-Carbs: {round(total['carbs'],1)}
+Calories: {round(total['calories'], 1)}
+Protein: {round(total['protein'], 1)}
+Fat: {round(total['fat'], 1)}
+Carbs: {round(total['carbs'], 1)}
 
 🧾 Food Suitability & Health Impact:
 {chr(10).join(feedback)}
@@ -283,8 +356,9 @@ def text_to_audio(text):
     return file.name
 
 # -------------------------
-# MAIN
+# MAIN - FOOD IMAGE UPLOAD
 # -------------------------
+st.markdown("## 🍽️ Food Analysis")
 uploaded_files = st.file_uploader("📸 Upload Food Images", accept_multiple_files=True)
 
 if uploaded_files:
@@ -308,7 +382,12 @@ if uploaded_files:
     # PER FOOD
     st.subheader("📊 Per Food Nutrients")
     for f, d in details:
-        st.write(f"{f} → Carbs:{round(d['carbs'],1)}, Protein:{round(d['protein'],1)}, Fat:{round(d['fat'],1)}, Vitamins:{round(d['vitamins'],1)}")
+        st.write(
+            f"{f} → Carbs:{round(d['carbs'],1)}, "
+            f"Protein:{round(d['protein'],1)}, "
+            f"Fat:{round(d['fat'],1)}, "
+            f"Vitamins:{round(d['vitamins'],1)}"
+        )
 
     # TOTAL + RINGS
     st.subheader("📊 Total Nutrient Consumption")
@@ -316,10 +395,10 @@ if uploaded_files:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.metric("Carbs", round(total["carbs"],1))
-        st.metric("Protein", round(total["protein"],1))
-        st.metric("Fat", round(total["fat"],1))
-        st.metric("Vitamins", round(total["vitamins"],1))
+        st.metric("Carbs", round(total["carbs"], 1))
+        st.metric("Protein", round(total["protein"], 1))
+        st.metric("Fat", round(total["fat"], 1))
+        st.metric("Vitamins", round(total["vitamins"], 1))
 
     with col2:
         st.markdown("### 🟢 Nutrient Activity Rings")
@@ -334,7 +413,7 @@ if uploaded_files:
         progress = [carbs_p, protein_p, fat_p, vit_p]
         colors = ["#00C2FF", "#00FF7F", "#FF7F50", "#FFD700"]
 
-        fig, ax = plt.subplots(figsize=(6,6))
+        fig, ax = plt.subplots(figsize=(6, 6))
         fig.patch.set_facecolor("#0E1117")
         ax.set_facecolor("#0E1117")
 
@@ -356,7 +435,6 @@ if uploaded_files:
 
         st.pyplot(fig)
 
-        # LEGEND
         st.markdown("### 🏷️ Nutrient Legend")
         c1, c2, c3, c4 = st.columns(4)
 
@@ -368,7 +446,6 @@ if uploaded_files:
             st.markdown("🟠 **Fat**")
         with c4:
             st.markdown("🟡 **Vitamins**")
-
 
     # ANALYSIS
     st.subheader("🤖 Health Analysis")
