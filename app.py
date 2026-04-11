@@ -300,14 +300,17 @@ if uploaded_files:
 
     total, details = calculate_total(all_foods)
 
+    # DETECTED FOODS
     st.subheader("🍔 Detected Food Items")
     for f in all_foods:
         st.success(f)
 
+    # PER FOOD
     st.subheader("📊 Per Food Nutrients")
     for f, d in details:
         st.write(f"{f} → Carbs:{round(d['carbs'],1)}, Protein:{round(d['protein'],1)}, Fat:{round(d['fat'],1)}, Vitamins:{round(d['vitamins'],1)}")
 
+    # TOTAL + RINGS
     st.subheader("📊 Total Nutrient Consumption")
 
     col1, col2 = st.columns(2)
@@ -353,14 +356,32 @@ if uploaded_files:
 
         st.pyplot(fig)
 
+        # LEGEND
+        st.markdown("### 🏷️ Nutrient Legend")
+        c1, c2, c3, c4 = st.columns(4)
+
+        with c1:
+            st.markdown("🔵 **Carbs**")
+        with c2:
+            st.markdown("🟢 **Protein**")
+        with c3:
+            st.markdown("🟠 **Fat**")
+        with c4:
+            st.markdown("🟡 **Vitamins**")
+
+        st.caption("Outer → Carbs | Inner → Vitamins (Progress towards daily requirement)")
+
+    # ANALYSIS
     st.subheader("🤖 Health Analysis")
     analysis = generate_analysis(all_foods, total, age, weight, height, gender, goal)
     st.write(analysis)
 
+    # GOAL
     st.subheader("🎯 Goal Suitability Analysis")
     bmi, _ = calculate_bmi(weight, height)
     st.info(evaluate_goal(bmi, goal))
 
+    # AUDIO
     st.subheader("🔊 Smart Audio Advice")
 
     feedback = evaluate_food_health(all_foods, total, bmi, goal, age)
@@ -374,55 +395,3 @@ if uploaded_files:
 
     if os.path.exists(audio):
         os.remove(audio)
-
-# -------------------------
-# 🤖 CONTEXT-AWARE CHATBOT
-# -------------------------
-st.markdown("---")
-st.subheader("🤖 Smart AI Nutrition Chatbot")
-
-@st.cache_resource
-def load_chatbot():
-    return pipeline("text-generation", model="distilgpt2")
-
-chatbot = load_chatbot()
-
-user_query = st.text_input("💬 Ask about your diet, food, or health:")
-
-if st.button("Ask AI"):
-    if user_query:
-
-        try:
-            bmi, status = calculate_bmi(weight, height)
-            context = f"""
-User Details:
-Age: {age}, Gender: {gender}, Goal: {goal}
-
-Health:
-BMI: {bmi} ({status})
-
-Detected Foods:
-{all_foods if 'all_foods' in locals() else "No food uploaded"}
-
-Nutrient Intake:
-{total if 'total' in locals() else "No data"}
-"""
-        except:
-            context = "No data available"
-
-        prompt = f"""
-You are a professional diet expert.
-
-Use the following user data to give personalized advice.
-
-{context}
-
-User Question: {user_query}
-
-Answer:
-"""
-
-        response = chatbot(prompt, max_length=200, do_sample=True)
-
-        answer = response[0]['generated_text'].replace(prompt, "")
-        st.success(answer)
