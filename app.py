@@ -388,7 +388,7 @@ def load_text_generator():
 
 text_generator = load_text_generator()
 
-user_query = st.text_input("Ask anything about health/diet:")
+user_query = st.text_input("Ask any task summarize/diet/tips/muscle/weight:")
 
 def health_ai_agent(task, context=""):
     task_lower = task.lower()
