@@ -4,13 +4,14 @@ from PIL import Image
 from gtts import gTTS
 import tempfile
 import os
-import json
+import requests
 import matplotlib.pyplot as plt
 
 # -------------------------
 # PAGE CONFIG
 # -------------------------
 st.set_page_config(page_title="AI Food Health Analyzer", layout="wide")
+
 st.title("🍔 GenAI Food & Health Analyzer")
 st.markdown("---")
 
@@ -21,6 +22,7 @@ st.sidebar.header("👤 User Profile")
 
 age = st.sidebar.number_input("Age", 5, 80)
 weight = st.sidebar.number_input("Weight (kg)", 20, 150)
+
 height_ft = st.sidebar.number_input("Height (feet)", 1.0, 7.0, step=0.1)
 height = round(height_ft * 30.48)
 
@@ -28,61 +30,260 @@ gender = st.sidebar.selectbox("Gender", ["Male", "Female"])
 goal = st.sidebar.selectbox("Goal", ["Weight Loss", "Muscle Gain", "Maintain"])
 
 # -------------------------
-# LOAD MODELS
+# LOAD MODEL
 # -------------------------
 @st.cache_resource
-def load_classifier():
+def load_model():
     return pipeline("image-classification", model="nateraw/food")
 
-@st.cache_resource
-def load_chatbot():
-    pipeline("text-generation", model="distilgpt2")
-
-classifier = load_classifier()
-chatbot = load_chatbot()
+classifier = load_model()
 
 # -------------------------
-# LOCAL NUTRITION DATA
+# API KEY
 # -------------------------
-nutrition_data = {
-    "rice": {"calories":130,"protein":2.7,"fat":0.3,"carbs":28},
-    "egg": {"calories":155,"protein":13,"fat":11,"carbs":1.1},
-    "burger": {"calories":295,"protein":17,"fat":12,"carbs":30},
-    "pizza": {"calories":266,"protein":11,"fat":10,"carbs":33},
-    "fries": {"calories":312,"protein":3.4,"fat":15,"carbs":41},
-    "apple": {"calories":52,"protein":0.3,"fat":0.2,"carbs":14},
-    "banana": {"calories":89,"protein":1.1,"fat":0.3,"carbs":23}
-}
+USDA_API_KEY = st.secrets["USDA_API_KEY"]
 
 # -------------------------
-# FUNCTIONS
+# BMI
 # -------------------------
-def get_nutrition(food):
-    food = food.lower()
-    return nutrition_data.get(food, {"calories":100,"protein":2,"fat":2,"carbs":10})
-
 def calculate_bmi(weight, height):
     h = height / 100
-    bmi = weight / (h*h)
-    if bmi < 18.5:
-        return round(bmi,2),"Underweight"
-    elif bmi < 25:
-        return round(bmi,2),"Normal"
-    elif bmi < 30:
-        return round(bmi,2),"Overweight"
-    else:
-        return round(bmi,2),"Obese"
+    bmi = weight / (h * h)
 
-def calculate_total(foods):
-    total = {"calories":0,"protein":0,"fat":0,"carbs":0}
-    for f in foods:
-        data = get_nutrition(f)
-        for k in total:
-            total[k] += data[k]
-    return total
+    if bmi < 18.5:
+        return round(bmi, 2), "Underweight"
+    elif bmi < 25:
+        return round(bmi, 2), "Normal"
+    elif bmi < 30:
+        return round(bmi, 2), "Overweight"
+    else:
+        return round(bmi, 2), "Obese"
 
 # -------------------------
-# IMAGE UPLOAD
+# BMR
+# -------------------------
+def calculate_bmr(weight, height, age, gender):
+    if gender == "Male":
+        return 10*weight + 6.25*height - 5*age + 5
+    else:
+        return 10*weight + 6.25*height - 5*age - 161
+
+# -------------------------
+# RDA
+# -------------------------
+def get_rda(age, weight, height, gender):
+    bmr = calculate_bmr(weight, height, age, gender)
+    calories = round(bmr * 1.4)
+
+    protein = round(0.8 * weight, 1)
+    carbs = round((0.5 * calories) / 4, 1)
+    fat = round((0.25 * calories) / 9, 1)
+
+    return {"calories": calories, "protein": protein, "carbs": carbs, "fat": fat}
+
+# -------------------------
+# CLEAN FOOD
+# -------------------------
+def clean_food(food):
+    mapping = {
+        "cheeseburger": "burger",
+        "french fries": "fries",
+        "bread pudding": "bread"
+    }
+    return mapping.get(food.lower(), food)
+
+# -------------------------
+# USDA NUTRITION
+# -------------------------
+def get_nutrition(food):
+    try:
+        food = clean_food(food)
+        url = f"https://api.nal.usda.gov/fdc/v1/foods/search?query={food}&api_key={USDA_API_KEY}"
+        res = requests.get(url).json()
+
+        nutrients = {"calories": 0, "protein": 0, "fat": 0, "carbs": 0, "vitamins": 0}
+
+        foods = res.get("foods", [])
+        if not foods:
+            return nutrients
+
+        for item in foods[0]["foodNutrients"]:
+            name = item["nutrientName"].lower()
+
+            if "energy" in name:
+                nutrients["calories"] = item["value"]
+            elif "protein" in name:
+                nutrients["protein"] = item["value"]
+            elif "fat" in name:
+                nutrients["fat"] = item["value"]
+            elif "carbohydrate" in name:
+                nutrients["carbs"] = item["value"]
+            elif "vitamin" in name:
+                nutrients["vitamins"] += item["value"]
+
+        return nutrients
+    except:
+        return {"calories": 0, "protein": 0, "fat": 0, "carbs": 0, "vitamins": 0}
+
+# -------------------------
+# TOTAL
+# -------------------------
+def calculate_total(foods):
+    total = {"calories": 0, "protein": 0, "fat": 0, "carbs": 0, "vitamins": 0}
+    details = []
+
+    for food in foods:
+        data = get_nutrition(food)
+        details.append((food, data))
+
+        for k in total:
+            total[k] += data[k]
+
+    return total, details
+
+# -------------------------
+# DEFICIENCY
+# -------------------------
+def analyze_deficiency(total, rda):
+    tips = []
+
+    if total["protein"] < 0.8 * rda["protein"]:
+        tips.append("Protein is low. Eat eggs, dal, paneer.")
+    if total["carbs"] < 0.8 * rda["carbs"]:
+        tips.append("Carbs are low. Eat rice, fruits.")
+    if total["fat"] < 0.8 * rda["fat"]:
+        tips.append("Healthy fats are low. Add nuts.")
+    if total["calories"] > 1.2 * rda["calories"]:
+        tips.append("Calories are high. Reduce junk food.")
+    if total["calories"] < 0.8 * rda["calories"]:
+        tips.append("Calories are low. Increase intake.")
+
+    return tips if tips else ["Diet is balanced."]
+
+# -------------------------
+# FOOD SUITABILITY
+# -------------------------
+def evaluate_food_health(foods, total, bmi, goal, age):
+
+    unhealthy = ["burger", "fries", "pizza", "donut", "hot dog"]
+    feedback = []
+
+    junk_items = [f for f in foods if any(j in f.lower() for j in unhealthy)]
+
+    if bmi > 25:
+        feedback.append("You are overweight. High-calorie foods increase fat storage and may lead to heart disease.")
+    elif bmi < 18.5:
+        feedback.append("You are underweight. Low-nutrient foods will not help in healthy weight gain.")
+    else:
+        feedback.append("Your BMI is normal. Maintaining diet quality is important.")
+
+    if junk_items:
+        feedback.append(f"The foods {', '.join(junk_items)} are unhealthy.")
+        feedback.append("These foods contain high unhealthy fats, sugar, and low nutrients.")
+
+        if age < 18:
+            feedback.append("May affect growth and immunity.")
+        elif age <= 40:
+            feedback.append("May lead to weight gain and poor metabolism.")
+        else:
+            feedback.append("Increases heart and cholesterol risks.")
+
+        if goal == "Weight Loss":
+            feedback.append("Not suitable for weight loss.")
+        if goal == "Muscle Gain":
+            feedback.append("Does not support muscle growth.")
+
+        feedback.append("Avoid fried and processed foods.")
+        feedback.append("Eat vegetables, fruits, whole grains, and proteins.")
+
+    else:
+        feedback.append("Foods are healthy in moderation.")
+
+    return feedback
+
+# -------------------------
+# GOAL SUITABILITY
+# -------------------------
+def evaluate_goal(bmi, goal):
+
+    if bmi < 18.5:
+        if goal == "Weight Loss":
+            return "❌ You are underweight. Weight loss is not recommended."
+        else:
+            return "✅ Your goal is appropriate."
+
+    elif bmi > 25:
+        if goal == "Muscle Gain":
+            return "⚠️ You are overweight. Focus on fat loss first."
+        elif goal == "Maintain":
+            return "⚠️ Consider weight loss instead."
+        else:
+            return "✅ Your goal aligns with your health."
+
+    else:
+        return "✅ Your goal is suitable."
+
+# -------------------------
+# ANALYSIS
+# -------------------------
+def generate_analysis(foods, total, age, weight, height, gender, goal):
+
+    bmi, status = calculate_bmi(weight, height)
+    rda = get_rda(age, weight, height, gender)
+    deficiency = analyze_deficiency(total, rda)
+    feedback = evaluate_food_health(foods, total, bmi, goal, age)
+
+    h = height / 100
+    min_w = round(18.5*(h*h),1)
+    max_w = round(24.9*(h*h),1)
+
+    bmr = calculate_bmr(weight, height, age, gender)
+
+    return f"""
+### 🧠 Personalized Health Analysis
+
+👤 Age: {age}  
+⚧ Gender: {gender}
+
+📏 Height: {round(height/30.48,1)} ft
+
+⚖️ BMI: {bmi} → {status}  
+Ideal Weight: {min_w}-{max_w} kg
+
+🔥 BMR: {round(bmr)} kcal  
+
+📊 Recommended:
+Calories: {rda['calories']}
+Protein: {rda['protein']}
+Fat: {rda['fat']}
+Carbs: {rda['carbs']}
+
+🍔 Foods: {foods}
+
+📊 Your Intake:
+Calories: {round(total['calories'],1)}
+Protein: {round(total['protein'],1)}
+Fat: {round(total['fat'],1)}
+Carbs: {round(total['carbs'],1)}
+
+🧾 Food Suitability & Health Impact:
+{chr(10).join(feedback)}
+
+⚠️ Nutritional Feedback:
+{', '.join(deficiency)}
+"""
+
+# -------------------------
+# AUDIO
+# -------------------------
+def text_to_audio(text):
+    tts = gTTS(text)
+    file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+    tts.save(file.name)
+    return file.name
+
+# -------------------------
+# MAIN
 # -------------------------
 uploaded_files = st.file_uploader("📸 Upload Food Images", accept_multiple_files=True)
 
@@ -94,65 +295,134 @@ if uploaded_files:
         st.image(img)
 
         res = classifier(img)
-        food = res[0]["label"].replace("_"," ")
+        food = res[0]["label"].replace("_", " ")
         all_foods.append(food)
 
-    total = calculate_total(all_foods)
+    total, details = calculate_total(all_foods)
 
-    st.subheader("🍔 Detected Foods")
+    st.subheader("🍔 Detected Food Items")
     for f in all_foods:
         st.success(f)
 
-    st.subheader("📊 Total Nutrients")
-    st.write(total)
+    st.subheader("📊 Per Food Nutrients")
+    for f, d in details:
+        st.write(f"{f} → Carbs:{round(d['carbs'],1)}, Protein:{round(d['protein'],1)}, Fat:{round(d['fat'],1)}, Vitamins:{round(d['vitamins'],1)}")
 
-    # -------------------------
-    # BMI
-    # -------------------------
-    bmi, status = calculate_bmi(weight, height)
-    st.subheader("⚖️ BMI")
-    st.write(f"{bmi} → {status}")
+    st.subheader("📊 Total Nutrient Consumption")
 
-    # -------------------------
-    # GRAPH
-    # -------------------------
-    st.subheader("📈 Nutrient Graph")
+    col1, col2 = st.columns(2)
 
-    labels = list(total.keys())
-    values = list(total.values())
+    with col1:
+        st.metric("Carbs", round(total["carbs"],1))
+        st.metric("Protein", round(total["protein"],1))
+        st.metric("Fat", round(total["fat"],1))
+        st.metric("Vitamins", round(total["vitamins"],1))
 
-    fig, ax = plt.subplots()
-    ax.bar(labels, values)
-    st.pyplot(fig)
+    with col2:
+        st.markdown("### 🟢 Nutrient Activity Rings")
 
-    # -------------------------
-    # AUDIO
-    # -------------------------
-    text = f"Your BMI is {bmi}. You are {status}"
-    tts = gTTS(text)
-    file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
-    tts.save(file.name)
-    st.audio(file.name)
+        rda = get_rda(age, weight, height, gender)
 
-    if os.path.exists(file.name):
-        os.remove(file.name)
+        carbs_p = min(total["carbs"] / rda["carbs"], 1)
+        protein_p = min(total["protein"] / rda["protein"], 1)
+        fat_p = min(total["fat"] / rda["fat"], 1)
+        vit_p = min(total["vitamins"] / 100, 1)
+
+        progress = [carbs_p, protein_p, fat_p, vit_p]
+        colors = ["#00C2FF", "#00FF7F", "#FF7F50", "#FFD700"]
+
+        fig, ax = plt.subplots(figsize=(6,6))
+        fig.patch.set_facecolor("#0E1117")
+        ax.set_facecolor("#0E1117")
+
+        for i, p in enumerate(progress):
+            ax.pie(
+                [p, 1-p],
+                radius=1 - i*0.18,
+                startangle=90,
+                counterclock=False,
+                colors=[colors[i], "#1f1f1f"],
+                wedgeprops=dict(width=0.13, edgecolor="none")
+            )
+
+        centre_circle = plt.Circle((0, 0), 0.35, color="#0E1117")
+        ax.add_artist(centre_circle)
+
+        ax.set(aspect="equal")
+        ax.axis('off')
+
+        st.pyplot(fig)
+
+    st.subheader("🤖 Health Analysis")
+    analysis = generate_analysis(all_foods, total, age, weight, height, gender, goal)
+    st.write(analysis)
+
+    st.subheader("🎯 Goal Suitability Analysis")
+    bmi, _ = calculate_bmi(weight, height)
+    st.info(evaluate_goal(bmi, goal))
+
+    st.subheader("🔊 Smart Audio Advice")
+
+    feedback = evaluate_food_health(all_foods, total, bmi, goal, age)
+    audio_text = "Health advice: "
+
+    for f in feedback:
+        audio_text += f + " "
+
+    audio = text_to_audio(audio_text)
+    st.audio(audio)
+
+    if os.path.exists(audio):
+        os.remove(audio)
 
 # -------------------------
-# AI CHATBOT
+# 🤖 CONTEXT-AWARE CHATBOT
 # -------------------------
-st.subheader("🤖 AI Nutrition Chatbot")
+st.markdown("---")
+st.subheader("🤖 Smart AI Nutrition Chatbot")
 
-user_query = st.text_input("Ask about food, diet, health:")
+@st.cache_resource
+def load_chatbot():
+    return pipeline("text-generation", model="distilgpt2")
+
+chatbot = load_chatbot()
+
+user_query = st.text_input("💬 Ask about your diet, food, or health:")
 
 if st.button("Ask AI"):
     if user_query:
-        prompt = f"You are a health expert. Give simple diet advice.\nUser: {user_query}\nAI:"
 
-        response = chatbot(
-            prompt,
-            max_length=100,
-            do_sample=True
-        )
+        try:
+            bmi, status = calculate_bmi(weight, height)
+            context = f"""
+User Details:
+Age: {age}, Gender: {gender}, Goal: {goal}
+
+Health:
+BMI: {bmi} ({status})
+
+Detected Foods:
+{all_foods if 'all_foods' in locals() else "No food uploaded"}
+
+Nutrient Intake:
+{total if 'total' in locals() else "No data"}
+"""
+        except:
+            context = "No data available"
+
+        prompt = f"""
+You are a professional diet expert.
+
+Use the following user data to give personalized advice.
+
+{context}
+
+User Question: {user_query}
+
+Answer:
+"""
+
+        response = chatbot(prompt, max_length=200, do_sample=True)
 
         answer = response[0]['generated_text'].replace(prompt, "")
         st.success(answer)
