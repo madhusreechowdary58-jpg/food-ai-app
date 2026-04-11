@@ -300,17 +300,14 @@ if uploaded_files:
 
     total, details = calculate_total(all_foods)
 
-    # DETECTED FOODS
     st.subheader("🍔 Detected Food Items")
     for f in all_foods:
         st.success(f)
 
-    # PER FOOD
     st.subheader("📊 Per Food Nutrients")
     for f, d in details:
         st.write(f"{f} → Carbs:{round(d['carbs'],1)}, Protein:{round(d['protein'],1)}, Fat:{round(d['fat'],1)}, Vitamins:{round(d['vitamins'],1)}")
 
-    # TOTAL + RINGS
     st.subheader("📊 Total Nutrient Consumption")
 
     col1, col2 = st.columns(2)
@@ -356,32 +353,14 @@ if uploaded_files:
 
         st.pyplot(fig)
 
-        # LEGEND
-        st.markdown("### 🏷️ Nutrient Legend")
-        c1, c2, c3, c4 = st.columns(4)
-
-        with c1:
-            st.markdown("🔵 **Carbs**")
-        with c2:
-            st.markdown("🟢 **Protein**")
-        with c3:
-            st.markdown("🟠 **Fat**")
-        with c4:
-            st.markdown("🟡 **Vitamins**")
-
-        st.caption("Outer → Carbs | Inner → Vitamins (Progress towards daily requirement)")
-
-    # ANALYSIS
     st.subheader("🤖 Health Analysis")
     analysis = generate_analysis(all_foods, total, age, weight, height, gender, goal)
     st.write(analysis)
 
-    # GOAL
     st.subheader("🎯 Goal Suitability Analysis")
     bmi, _ = calculate_bmi(weight, height)
     st.info(evaluate_goal(bmi, goal))
 
-    # AUDIO
     st.subheader("🔊 Smart Audio Advice")
 
     feedback = evaluate_food_health(all_foods, total, bmi, goal, age)
@@ -397,44 +376,38 @@ if uploaded_files:
         os.remove(audio)
 
 # =========================================================
-# 🤖 EXTRA FEATURE: AI HEALTH ASSISTANT (ADDED ONLY)
+# 🤖 AI HEALTH ASSISTANT (FINAL - ERROR FREE)
 # =========================================================
 
 st.markdown("---")
 st.subheader("🤖 AI Health Assistant")
 
-# Load text model separately (no disturbance)
 @st.cache_resource
 def load_text_generator():
-    return pipeline("text-generation", model="gpt2")
+    return pipeline("text2text-generation", model="google/flan-t5-base")
 
 text_generator = load_text_generator()
 
-# User input
-user_query = st.text_input("Ask health/diet/tips questions:")
+user_query = st.text_input("Ask anything about health/diet:")
 
-# AI Agent function (simple like your 7th experiment but adapted)
 def health_ai_agent(task, context=""):
-    task = task.lower()
-
-    if "summarize" in task:
-        prompt = "Summarize this health report:\n" + context
-    elif "diet" in task:
-        prompt = "Give a short healthy diet suggestion."
-    elif "tips" in task:
+    if "summarize" in task.lower():
+        prompt = f"Summarize this:\n{context}"
+    elif "diet" in task.lower():
+        prompt = "Give a healthy diet plan in short."
+    elif "tips" in task.lower():
         prompt = "Give 3 simple health tips."
-    elif "joke" in task:
+    elif "joke" in task.lower():
         prompt = "Tell a short funny health joke."
     else:
-        prompt = task
+        prompt = f"Answer clearly: {task}"
 
-    result = text_generator(prompt, max_new_tokens=60)
+    result = text_generator(prompt, max_new_tokens=80)
     return result[0]['generated_text']
 
-# Button action
 if st.button("Ask AI Assistant"):
     try:
-        context_data = analysis  # use your existing analysis safely
+        context_data = analysis
     except:
         context_data = "general health"
 
