@@ -4,5 +4,5 @@ Pillow
 gtts
 requests
 matplotlib
-google-generativeai
 torch
+sentencepiece
