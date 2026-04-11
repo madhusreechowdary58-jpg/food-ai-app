@@ -397,42 +397,28 @@ if uploaded_files:
         os.remove(audio)
 
 # =========================================================
-# 🤖 NEW FEATURE: AI HEALTH ASSISTANT (IMPROVED)
+# 🤖 EXTRA FEATURE: AI HEALTH ASSISTANT (ADDED ONLY)
 # =========================================================
 
 st.markdown("---")
 st.subheader("🤖 AI Health Assistant")
 
+# Load text model separately (no disturbance)
 @st.cache_resource
 def load_text_generator():
     return pipeline("text-generation", model="gpt2")
 
-@st.cache_resource
-def load_qa_model():
-    return pipeline(
-        "question-answering",
-        model="distilbert-base-cased-distilled-squad"
-    )
-
-qa_model = load_qa_model()
 text_generator = load_text_generator()
 
-user_query = st.text_input("Ask anything about health/diet:")
+# User input
+user_query = st.text_input("Ask health/diet/tips questions:")
 
+# AI Agent function (simple like your 7th experiment but adapted)
 def health_ai_agent(task, context=""):
     task = task.lower()
 
-    # Better answering using QA
-    if "what" in task or "why" in task or "how" in task:
-        try:
-            result = qa_model(question=task, context=context)
-            return result['answer']
-        except:
-            pass
-
-    # Fallback generation
     if "summarize" in task:
-        prompt = "Summarize this:\n" + context
+        prompt = "Summarize this health report:\n" + context
     elif "diet" in task:
         prompt = "Give a short healthy diet suggestion."
     elif "tips" in task:
@@ -445,9 +431,10 @@ def health_ai_agent(task, context=""):
     result = text_generator(prompt, max_new_tokens=60)
     return result[0]['generated_text']
 
+# Button action
 if st.button("Ask AI Assistant"):
     try:
-        context_data = analysis
+        context_data = analysis  # use your existing analysis safely
     except:
         context_data = "general health"
 
