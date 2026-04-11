@@ -4,5 +4,5 @@ Pillow
 gtts
 requests
 matplotlib
-anthropic
+google-generativeai
 torch
